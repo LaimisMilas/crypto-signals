@@ -1,0 +1,6 @@
+services:
+  app:
+    image: ghcr.io/<tavo-gh-username>/crypto-signals:latest
+    ports: ["3000:3000"]
+    env_file: .env
+    restart: unless-stopped

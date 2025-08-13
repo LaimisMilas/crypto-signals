@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Server deps
+        run: npm install
+
+      - name: Client deps + build
+        working-directory: ./client
+        run: |
+          npm install
+          npm run build
+
+      - name: Copy build to public
+        run: |
+          rm -rf public/*
+          cp -r client/dist/* public/
+
+      - name: Compile check
+        run: node -e "require('fs').accessSync('./src/index.js')"
