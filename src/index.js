@@ -36,12 +36,6 @@ app.get('/signals/latest', (req, res) => {
 // Stripe checkout
 app.post('/api/checkout-session', createCheckoutSession);
 
-// Serve static (React build copied to /public)
-app.use(express.static(path.join(__dirname, '../public')));
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
-});
-
 app.get('/api/telegram-invite', async (req, res) => {
   try {
     const email = (req.query.email || '').trim().toLowerCase();
@@ -69,6 +63,12 @@ app.get('/api/telegram-invite', async (req, res) => {
   } catch (e) {
     return res.status(500).json({ error: 'server_error' });
   }
+});
+
+// Serve static (React build copied to /public)
+app.use(express.static(path.join(__dirname, '../public')));
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
 app.listen(cfg.port, () => console.log(`HTTP on :${cfg.port}`));
