@@ -24,7 +24,7 @@ export async function createCheckoutSession(req, res) {
   }
 }
 
-export function stripeWebhook(req, res) {
+export async function stripeWebhook(req, res) {
   let event;
   try {
     const sig = req.headers['stripe-signature'];
@@ -33,11 +33,44 @@ export function stripeWebhook(req, res) {
     console.error(err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
-
   switch (event.type) {
-    case 'checkout.session.completed':
-      onCheckoutCompleted(event.data.object);
+    case 'checkout.session.completed': {
+      const sessionObj = event.data.object;
+
+      // 1) parsinešam pilną Session su expand
+      const full = await stripe.checkout.sessions.retrieve(sessionObj.id, {
+        expand: ['subscription', 'customer']
+      });
+
+      // 2) subscription ID
+      const subId =
+          (typeof full.subscription === 'string' ? full.subscription : full.subscription?.id) || null;
+
+      // 3) email
+      const email =
+          full.customer_details?.email ||
+          (full.customer && full.customer.email) ||
+          null;
+
+      console.log('📝 [WEBHOOK] checkout.completed email:', email, 'sub:', subId);
+
+      // 4) jei neradom subId – tiesiog išeinam (ateis kiti sub.* eventai)
+      if (!subId) {
+        console.warn('⚠️ [WEBHOOK] Subscription ID nerastas, laukiam sub.* įvykių');
+        return res.json({received: true});
+      }
+
+      db.run(
+          `INSERT INTO subscribers (email, subscription_id, status, created_at)
+           VALUES (?, ?, ?, strftime('%s', 'now') * 1000)`,
+          [email, subId, 'active'],
+          (err) => {
+            if (err) console.error('DB insert subscriber error', err.message);
+            else console.log('✅ [DB] Subscriber added', email || '(no-email)', subId);
+          }
+      );
       break;
+    }
     case 'customer.subscription.deleted':
       onSubscriptionUpdated(event.data.object, 'canceled');
       break;
@@ -48,7 +81,7 @@ export function stripeWebhook(req, res) {
       // ignore others
       break;
   }
-  res.json({ received: true });
+  res.json({received: true});
 }
 
 function requireEvent(rawBody, sig) {
@@ -72,13 +105,22 @@ function onCheckoutCompleted(session) {
 }
 
 function onSubscriptionUpdated(sub, status) {
-  // update status by subscription id
   db.run(
-    `UPDATE subscribers SET status=? WHERE subscription_id=?`,
-    [status, sub.id],
-    (err) => {
-      if (err) console.error('DB update subscriber error', err.message);
-      else console.log('Subscriber status updated', sub.id, status);
-    }
+      `UPDATE subscribers SET status=? WHERE subscription_id=?`,
+      [status, sub.id],
+      function (err) {
+        if (err) return console.error('DB update err', err.message);
+        if (this.changes === 0) {
+          db.run(
+              `INSERT INTO subscribers (email, subscription_id, status, created_at)
+           VALUES (?,?,?, strftime('%s','now')*1000)`,
+              [null, sub.id, status],
+              (e2) => e2 ? console.error('DB upsert err', e2.message)
+                  : console.log('✅ [DB] UPSERT', sub.id, status)
+          );
+        } else {
+          console.log('✅ [DB] Status updated', sub.id, status);
+        }
+      }
   );
 }
