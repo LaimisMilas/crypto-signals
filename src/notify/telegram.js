@@ -11,3 +11,12 @@ export async function notifyPrivate(text) {
   if (!cfg.tgPrivate) return;
   await bot.sendMessage(cfg.tgPrivate, text, { parse_mode: 'Markdown' });
 }
+export async function createSingleUseInviteLink() {
+  if (!cfg.tgPrivate) throw new Error('Missing TELEGRAM_PRIVATE_CHAT_ID');
+  // Botas PRIVALO būti to kanalo adminu su „Add Users / Invite via Link“ teisėmis
+  const link = await bot.createChatInviteLink(cfg.tgPrivate, {
+    member_limit: 1, // vienkartinė
+    // (nebūtina) expire_date: Math.floor(Date.now()/1000) + 3600
+  });
+  return link.invite_link;
+}
