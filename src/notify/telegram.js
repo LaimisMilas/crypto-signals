@@ -1,6 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { cfg } from '../config.js';
 
+if (!cfg.tgToken) throw new Error('Missing TELEGRAM_BOT_TOKEN');
 export const bot = new TelegramBot(cfg.tgToken, { polling: false });
 
 export async function notifyPublic(text) {
