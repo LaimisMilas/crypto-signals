@@ -36,5 +36,4 @@ jobs:
             --image $IMAGE \
             --region ${{ secrets.GCP_REGION }} \
             --platform managed \
-            --allow-unauthenticated \
-            --port 3000
+            --allow-unauthenticated

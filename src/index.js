@@ -4,7 +4,6 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import bodyParser from 'body-parser';
-import { cfg } from './config.js';
 import { db } from './storage/db.js';
 import { createSingleUseInviteLink } from './notify/telegram.js';
 import { createCheckoutSession, stripeWebhook } from './payments/stripe.js';
@@ -12,6 +11,7 @@ import { createCheckoutSession, stripeWebhook } from './payments/stripe.js';
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(cookieParser());
@@ -71,4 +71,4 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-app.listen(cfg.port, () => console.log(`HTTP on :${cfg.port}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Server listening on ${PORT}`));

@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "type": "module",
   "scripts": {
+    "start": "node src/index.js",
     "dev": "node src/index.js",
     "backtest": "node src/engine/backtest.js",
     "live": "node src/engine/live.js",
