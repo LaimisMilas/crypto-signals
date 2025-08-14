@@ -1,31 +1,31 @@
 CREATE TABLE IF NOT EXISTS candles (
-  id SERIAL PRIMARY KEY,
-  ts BIGINT NOT NULL UNIQUE,
-  open DOUBLE PRECISION,
-  high DOUBLE PRECISION,
-  low DOUBLE PRECISION,
-  close DOUBLE PRECISION,
-  volume DOUBLE PRECISION
+                                       id SERIAL PRIMARY KEY,
+                                       ts BIGINT NOT NULL UNIQUE,
+                                       open DOUBLE PRECISION,
+                                       high DOUBLE PRECISION,
+                                       low DOUBLE PRECISION,
+                                       close DOUBLE PRECISION,
+                                       volume DOUBLE PRECISION
 );
 
 CREATE TABLE IF NOT EXISTS signals (
-  id SERIAL PRIMARY KEY,
-  ts BIGINT NOT NULL,
-  type TEXT CHECK(type IN ('BUY','SELL')) NOT NULL,
-  price DOUBLE PRECISION NOT NULL,
-  rsi DOUBLE PRECISION,
-  atr DOUBLE PRECISION,
-  aroon_up DOUBLE PRECISION,
-  aroon_down DOUBLE PRECISION,
-  reason TEXT
-);
+                                       id SERIAL PRIMARY KEY,
+                                       ts BIGINT NOT NULL,
+                                       type TEXT CHECK(type IN ('BUY','SELL')) NOT NULL,
+    price DOUBLE PRECISION NOT NULL,
+    rsi DOUBLE PRECISION,
+    atr DOUBLE PRECISION,
+    aroon_up DOUBLE PRECISION,
+    aroon_down DOUBLE PRECISION,
+    reason TEXT
+    );
 
 CREATE TABLE IF NOT EXISTS subscribers (
-  id SERIAL PRIMARY KEY,
-  email TEXT,
-  subscription_id TEXT,
-  status TEXT,
-  created_at BIGINT
+                                           id SERIAL PRIMARY KEY,
+                                           email TEXT,
+                                           subscription_id TEXT,
+                                           status TEXT, -- active, trialing, canceled, past_due, unpaid
+                                           created_at BIGINT
 );
 
 CREATE INDEX IF NOT EXISTS idx_candles_ts ON candles(ts);
