@@ -1,54 +1,40 @@
-name: Build & Deploy
+name: Deploy to Cloud Run
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: ["main"]
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-
-      # Login to GHCR using the built-in GITHUB_TOKEN
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Build and push Docker image to ghcr.io/laimismilas/crypto-signals:latest
-      - name: Build & Push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ghcr.io/laimismilas/crypto-signals:latest
-
   deploy:
-    needs: build-and-push
     runs-on: ubuntu-latest
+
     steps:
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.9.0
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          ssh-private-key: ${{ secrets.SSH_KEY }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Add known_hosts
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev
+
+      - name: Build and Push Docker image
         run: |
-          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/crypto-signals-repo/crypto-signals:latest"
+          docker build -t $IMAGE .
+          docker push $IMAGE
 
-      - name: Deploy over SSH
+      - name: Deploy to Cloud Run
         run: |
-          ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            set -e
-            mkdir -p /opt/crypto-signals
-            cd /opt/crypto-signals
-
-            # Login to GHCR on the remote server
+          IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/crypto-signals-repo/crypto-signals:latest"
+          gcloud run deploy crypto-signals \
+            --image $IMAGE \
+            --region ${{ secrets.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 3000
