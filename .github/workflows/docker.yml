@@ -14,19 +14,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
+
+      # Login to GHCR using the built-in GITHUB_TOKEN
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build and push Docker image to ghcr.io/laimismilas/crypto-signals:latest
       - name: Build & Push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/laimismilas/crypto-signals:latest
+          tags: ghcr.io/laimismilas/crypto-signals:latest
 
   deploy:
     needs: build-and-push
@@ -36,17 +39,16 @@ jobs:
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_KEY }}
+
       - name: Add known_hosts
         run: |
           echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+
       - name: Deploy over SSH
         run: |
           ssh -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
             set -e
             mkdir -p /opt/crypto-signals
             cd /opt/crypto-signals
-            docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
-            docker compose pull
-            docker compose up -d
-            docker system prune -f
-          EOF
+
+            # Login to GHCR on the remote server
