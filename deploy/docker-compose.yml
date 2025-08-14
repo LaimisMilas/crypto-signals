@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  app:
+    image: ghcr.io/LaimisMilas/crypto-signals:latest
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks: [web]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    # Optional: persist DB locally
+    # volumes:
+    #   - ./data:/usr/src/app/data
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=clicker.lt
+      - EMAIL=laimis.milasius@gmail.com
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [web]
+
+networks:
+  web:
+
+volumes:
+  caddy_data:
+  caddy_config:
