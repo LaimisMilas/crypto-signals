@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   app:
-    image: ghcr.io/LaimisMilas/crypto-signals:latest
+    image: ghcr.io/laimismilas/crypto-signals:latest
     env_file:
       - .env
     restart: unless-stopped

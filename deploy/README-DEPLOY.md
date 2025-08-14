@@ -1,14 +1,14 @@
 # Crypto Signals – Production Deploy (Docker + Caddy)
 
 Domain: **https://clicker.lt**
-Repo/Image: **ghcr.io/LaimisMilas/crypto-signals:latest**
+Repo/Image: **ghcr.io/laimismilas/crypto-signals:latest**
 Notifications: **laimis.milasius@gmail.com** (Let's Encrypt admin email)
 
 ## 0) Prereqs
 - A-record for `clicker.lt` points to your VPS IP.
 - GitHub Actions has SSH access to the server.
 
-## 1) GitHub Actions Secrets (in LaimisMilas/crypto-signals)
+## 1) GitHub Actions Secrets (in laimismilas/crypto-signals)
 Settings → Secrets and variables → Actions:
 - `SSH_HOST`   → your.server.ip.or.name
 - `SSH_USER`   → e.g. `ubuntu`
