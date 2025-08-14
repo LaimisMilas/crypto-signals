@@ -1,0 +1,13 @@
+{
+  email {env.EMAIL}
+}
+{env.DOMAIN} {
+  encode gzip
+  reverse_proxy app:3000
+  @health {
+    path /health
+  }
+  respond @health 200 {
+    body "ok"
+  }
+}
