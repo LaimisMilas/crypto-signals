@@ -3,7 +3,7 @@
 Production-ready MVP for a crypto trading signals service.
 
 ## Stack
-- Node.js (Express) + SQLite
+- Node.js (Express) + PostgreSQL
 - Binance REST + WebSocket klines
 - Telegram Bot (public/private channel messages)
 - Stripe Checkout (monthly subscription)
