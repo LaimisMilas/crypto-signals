@@ -25,13 +25,13 @@ jobs:
 
       - name: Build and Push Docker image
         run: |
-          IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/crypto-signals-repo/crypto-signals:latest"
+          IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/crypto-signal/crypto-signals:latest"
           docker build -t $IMAGE .
           docker push $IMAGE
 
       - name: Deploy to Cloud Run
         run: |
-          IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/crypto-signals-repo/crypto-signals:latest"
+          IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/crypto-signal/crypto-signals:latest"
           gcloud run deploy crypto-signals \
             --image $IMAGE \
             --region ${{ secrets.GCP_REGION }} \
