@@ -1,39 +1,45 @@
-import { rsi, atr } from './indicators.js';
+export function runBacktest({ ts, open, high, low, close }, { rsiArr, atrArr }, params) {
+  const {
+    rsiBuy=30, rsiSell=70,
+    atrMult=2,
+    positionSize=1.0
+  } = params;
 
-export function runBacktest(candles, { period = 14, atrMult = 2 } = {}) {
-  let position = null;
-  let pnl = 0;
-  let trades = 0, wins = 0, losses = 0;
+  let pos = 0; // 0 none, 1 long
+  let entry = 0;
+  let stop = 0;
+  const trades = [];
 
-  for (let i = period + 1; i < candles.length; i++) {
-    const slice = candles.slice(0, i + 1);
-    const closes = slice.map(c => c.close);
-    const r = rsi(closes, period);
-    const a = atr(slice, period);
-    const last = slice[slice.length - 1];
+  for (let i = 1; i < close.length; i++) {
+    const r = rsiArr[i];
+    const a = atrArr[i];
 
-    if (!position && r !== null && r < 30) {
-      const entry = last.close;
-      position = { entry, sl: entry - atrMult * a, tp: entry + atrMult * a };
-      trades++;
-    } else if (position) {
-      if (last.low <= position.sl) {
-        pnl += position.sl - position.entry;
-        losses++;
-        position = null;
-      } else if (last.high >= position.tp) {
-        pnl += position.tp - position.entry;
-        wins++;
-        position = null;
-      } else if (r !== null && r > 70) {
-        const exit = last.close;
-        pnl += exit - position.entry;
-        if (exit > position.entry) wins++; else losses++;
-        position = null;
+    if (!a || !r) continue;
+
+    if (pos === 0 && r <= rsiBuy) {
+      pos = 1;
+      entry = close[i];
+      stop = entry - atrMult * a;
+      trades.push({ ts: ts[i], side: 'BUY', price: entry });
+    } else if (pos === 1) {
+      // stop
+      if (low[i] <= stop) {
+        const exit = stop;
+        trades.push({ ts: ts[i], side: 'SELL', price: exit, pnl: (exit-entry)*positionSize });
+        pos = 0; entry = 0; stop = 0;
+      }
+      // overbought
+      else if (r >= rsiSell) {
+        const exit = close[i];
+        trades.push({ ts: ts[i], side: 'SELL', price: exit, pnl: (exit-entry)*positionSize });
+        pos = 0; entry = 0; stop = 0;
+      } else {
+        // trail stop (paprastas – fiksuotas)
+        stop = Math.max(stop, close[i] - atrMult * a);
       }
     }
   }
 
-  return { trades, wins, losses, pnl };
+  const pnl = trades.filter(t => 'pnl' in t).reduce((s,t)=>s+t.pnl,0);
+  return { trades, pnl };
 }
-
