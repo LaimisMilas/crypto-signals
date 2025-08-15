@@ -22,3 +22,5 @@ data.sqlite
 
 # Vite build
 client/dist/
+/crypto-signal-12245b8873c0.json
+/crypto-signal-prod-c87a61be0e72.json
