@@ -9,6 +9,7 @@
     "live": "node src/engine/live.js",
     "initdb": "node src/storage/db.js",
     "build:client": "cd client && npm install && npm run build && cd .. && rm -rf public/* && cp -r client/dist/* public/",
+    "bt": "node scripts/run-backtest.js"
     "fetch:binance": "node scripts/fetch-binance.js"
   },
   "dependencies": {
