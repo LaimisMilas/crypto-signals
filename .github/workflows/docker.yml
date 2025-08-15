@@ -3,6 +3,7 @@ name: Deploy to Cloud Run
 on:
   push:
     branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -12,6 +13,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Autentikacija į GCP
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -19,21 +21,58 @@ jobs:
 
       - name: Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
+      # Docker login į Artifact Registry
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev
+        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
 
+      # Build & Push
       - name: Build and Push Docker image
+        env:
+          IMAGE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/crypto-signal/crypto-signals:latest
         run: |
-          IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/crypto-signal/crypto-signals:latest"
-          docker build -t $IMAGE .
-          docker push $IMAGE
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
+      # Deploy į Cloud Run (su env kintamaisiais ir baziniais resursais)
       - name: Deploy to Cloud Run
+        env:
+          SERVICE: crypto-signals   # pasirink vieną pavadinimą ir jo laikykis
+          REGION: ${{ secrets.GCP_REGION }}
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          PUBLIC_URL: ${{ secrets.PUBLIC_URL }}                             # pvz. https://clicker.lt arba run.app URL
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_PRICE_ID: ${{ secrets.STRIPE_PRICE_ID }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_PRIVATE_CHAT_ID: ${{ secrets.TELEGRAM_PRIVATE_CHAT_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}                         # Neon: ...?sslmode=require
         run: |
-          IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/crypto-signal/crypto-signals:latest"
-          gcloud run deploy crypto-signals-prod \
-            --image $IMAGE \
-            --region ${{ secrets.GCP_REGION }} \
+          gcloud run deploy "$SERVICE" \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
             --platform managed \
-            --allow-unauthenticated
+            --image "$IMAGE" \
+            --allow-unauthenticated \
+            --set-env-vars "PUBLIC_URL=$PUBLIC_URL" \
+            --set-env-vars "STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY" \
+            --set-env-vars "STRIPE_PRICE_ID=$STRIPE_PRICE_ID" \
+            --set-env-vars "STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET" \
+            --set-env-vars "TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN" \
+            --set-env-vars "TELEGRAM_PRIVATE_CHAT_ID=$TELEGRAM_PRIVATE_CHAT_ID" \
+            --set-env-vars "DATABASE_URL=$DATABASE_URL" \
+            --concurrency=80 \
+            --cpu=1 --memory=512Mi \
+            --min-instances=0 --max-instances=5
+
+      # Parodyti paslaugos URL
+      - name: Show Cloud Run URL
+        env:
+          SERVICE: crypto-signals
+          REGION: ${{ secrets.GCP_REGION }}
+        run: |
+          URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')
+          echo "Cloud Run URL: $URL"
