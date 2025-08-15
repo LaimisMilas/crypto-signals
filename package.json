@@ -8,7 +8,8 @@
     "backtest": "node src/engine/backtest.js",
     "live": "node src/engine/live.js",
     "initdb": "node src/storage/db.js",
-    "build:client": "cd client && npm install && npm run build && cd .. && rm -rf public/* && cp -r client/dist/* public/"
+    "build:client": "cd client && npm install && npm run build && cd .. && rm -rf public/* && cp -r client/dist/* public/",
+    "bt": "node scripts/run-backtest.js"
   },
   "dependencies": {
     "axios": "^1.7.2",
