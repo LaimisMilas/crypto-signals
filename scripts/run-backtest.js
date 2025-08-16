@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from 'fs';
 import 'dotenv/config';
 import { Pool } from 'pg';
 import { rsi, atr } from '../src/backtest/indicators.js';
@@ -33,6 +34,43 @@ async function main() {
         atrMult: 2,
         positionSize: 1
     });
+
+// --- NEW: metrikos
+    const closed = trades.filter(t => 'pnl' in t);
+    const wins = closed.filter(t => t.pnl > 0).length;
+    const losses = closed.filter(t => t.pnl <= 0).length;
+    const winRate = closed.length ? (wins / closed.length) * 100 : 0;
+
+// equity curve
+    let eq = 0;
+    const equity = [];
+    for (const t of trades) {
+        if ('pnl' in t) eq += t.pnl;
+        equity.push({ ts: Number(t.ts), equity: eq });
+    }
+
+// max drawdown
+    let peak = -Infinity, maxDD = 0;
+    for (const p of equity) {
+        if (p.equity > peak) peak = p.equity;
+        const dd = peak - p.equity;
+        if (dd > maxDD) maxDD = dd;
+    }
+
+// išsaugom
+    fs.writeFileSync('metrics.json', JSON.stringify({
+        trades: trades.length,
+        closedTrades: closed.length,
+        pnl,
+        winRate: Number(winRate.toFixed(2)),
+        maxDrawdown: Number(maxDD.toFixed(2))
+    }, null, 2));
+
+    let csv = 'ts,equity\n' + equity.map(r => `${r.ts},${r.equity}`).join('\n');
+    fs.writeFileSync('backtest.csv', csv);
+
+    console.log(`Trades: ${trades.length}, Closed: ${closed.length}, WinRate: ${winRate.toFixed(1)}%, PnL: ${pnl.toFixed(2)}, MaxDD: ${maxDD.toFixed(2)}`);
+    console.log('Saved: metrics.json, backtest.csv');
 
     console.log(`Trades: ${trades.length}, PnL: ${pnl.toFixed(2)}`);
     const last = trades.slice(-10);
