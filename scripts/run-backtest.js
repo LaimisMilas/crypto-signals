@@ -2,8 +2,7 @@
 import fs from 'fs';
 import 'dotenv/config';
 import { Pool } from 'pg';
-import { rsi, atr } from '../src/backtest/indicators.js';
-import { runBacktest } from '../src/backtest/engine.js';
+import { generateSignals } from '../src/strategy.js';
 
 const [,, start='2024-01-01', end='2024-03-01'] = process.argv;
 
@@ -19,20 +18,25 @@ async function main() {
         process.exit(1);
     }
 
-    const ts = rows.map(r=>Number(r.ts));
-    const open = rows.map(r=>Number(r.open));
-    const high = rows.map(r=>Number(r.high));
-    const low  = rows.map(r=>Number(r.low));
-    const close= rows.map(r=>Number(r.close));
+    // Sukonstruojam candles masyvą strategijai
+    const candles = rows.map(r => ({
+        ts: Number(r.ts),
+        open: Number(r.open),
+        high: Number(r.high),
+        low: Number(r.low),
+        close: Number(r.close),
+        volume: Number(r.volume),
+    }));
 
-    const rsiArr = rsi(close, 14);
-    const atrArr = atr(high, low, close, 14);
-
-    const { trades, pnl } = runBacktest({ ts, open, high, low, close }, { rsiArr, atrArr }, {
-        rsiBuy: 30,
-        rsiSell: 70,
+    const { trades, pnl } = generateSignals(candles, {
+        rsiBuy: 25,
+        rsiSell: 65,
         atrMult: 2,
-        positionSize: 1
+        adxMin: 15,        // buvo 20
+        useTrendFilter: true,
+        feePct: 0.0005,
+        slippagePct: 0.0005,
+        positionSize: 1,
     });
 
 // --- NEW: metrikos

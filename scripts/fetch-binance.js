@@ -18,7 +18,7 @@ ON CONFLICT (ts) DO UPDATE SET
 `;
 
 // Naudojimas: node scripts/fetch-binance.js BTCUSDT 1h 2024-01-01 2024-03-01
-const [,, symbol='BTCUSDT', interval='1h', start='2024-01-01', end='2024-03-01'] = process.argv;
+const [,, symbol='BTCUSDT', interval='1h', start='2023-04-01', end='2024-01-01'] = process.argv;
 const startMs = Date.parse(start);
 const endMs   = Date.parse(end);
 
