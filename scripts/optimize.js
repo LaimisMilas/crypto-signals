@@ -4,8 +4,15 @@ import { Pool } from 'pg';
 import fs from 'fs';
 import { generateSignals } from '../src/strategy.js';
 
-const [,, start='2024-01-01', end='2024-03-01', writeFlag] = process.argv;
-const WRITE_BEST = writeFlag === '--write-best';
+const args = process.argv.slice(2);
+const start = args[0] ?? '2024-01-01';
+const end = args[1] ?? '2024-03-01';
+let adxVals = [12, 15, 18, 20];
+let WRITE_BEST = false;
+for (const arg of args.slice(2)) {
+  if (arg === '--write-best') WRITE_BEST = true;
+  else adxVals = arg.split(',').map(Number);
+}
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -66,7 +73,7 @@ function computeMetrics(trades, pnl) {
     rsiBuy: [25, 30, 35],
     rsiSell: [65, 70, 75],
     atrMult: [1.5, 2, 2.5],
-    adxMin: [12, 15, 18, 20],
+    adxMin: adxVals,
   };
 
   const results = [];
