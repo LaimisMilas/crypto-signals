@@ -3,17 +3,15 @@ import 'dotenv/config';
 import { Pool } from 'pg';
 import { rsi, atr, ema, adx } from '../src/backtest/indicators.js';
 import https from 'https';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
-// NAUJOS strategijos reikšmės (iš tavo geriausio rinkinio)
-const PARAMS = {
-    rsiBuy: 25,
-    rsiSell: 65,
-    atrMult: 2,
-    adxMin: 15,          // jei bus per mažai signalų – bandyk 12/13/14
-    useTrendFilter: true
-};
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const paramsPath = path.join(__dirname, '..', 'config', 'params.json');
+const params = JSON.parse(fs.readFileSync(paramsPath, 'utf-8'));
 
 function tgSend(text) {
     const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -59,12 +57,12 @@ function tgSend(text) {
     if (r==null || a==null || e==null) { console.log('Indikatoriai dar neparuošti.'); process.exit(0); }
 
     // Filtrai: EMA (trend) + ADX (stiprumas)
-    if (PARAMS.useTrendFilter && !(c[last] > e)) { console.log('Trend filtras atmetė.'); process.exit(0); }
-    if (A != null && A < PARAMS.adxMin) { console.log(`ADX ${A.toFixed(1)} < ${PARAMS.adxMin} – atmetam.`); process.exit(0); }
+    if (params.useTrendFilter && !(c[last] > e)) { console.log('Trend filtras atmetė.'); process.exit(0); }
+    if (A != null && A < params.adxMin) { console.log(`ADX ${A.toFixed(1)} < ${params.adxMin} – atmetam.`); process.exit(0); }
 
     let type=null, reason='';
-    if (r <= PARAMS.rsiBuy) { type='BUY'; reason = `RSI=${r.toFixed(1)}<=${PARAMS.rsiBuy}, ADX=${A?.toFixed(1)}`; }
-    else if (r >= PARAMS.rsiSell) { type='SELL'; reason = `RSI=${r.toFixed(1)}>=${PARAMS.rsiSell}, ADX=${A?.toFixed(1)}`; }
+    if (r <= params.rsiBuy) { type='BUY'; reason = `RSI=${r.toFixed(1)}<=${params.rsiBuy}, ADX=${A?.toFixed(1)}`; }
+    else if (r >= params.rsiSell) { type='SELL'; reason = `RSI=${r.toFixed(1)}>=${params.rsiSell}, ADX=${A?.toFixed(1)}`; }
 
     if (!type) { console.log('No signal'); process.exit(0); }
 
