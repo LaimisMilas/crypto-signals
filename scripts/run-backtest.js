@@ -6,7 +6,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { generateSignals } from '../src/strategy.js';
 
-const [,, start='2024-01-01', end='2024-03-01'] = process.argv;
+// optional 3rd CLI argument overrides adxMin from params.json
+const [,, start='2024-01-01', end='2024-03-01', adxArg] = process.argv;
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -34,6 +35,7 @@ async function main() {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const paramsPath = path.join(__dirname, '..', 'config', 'params.json');
     const params = JSON.parse(fs.readFileSync(paramsPath, 'utf-8'));
+    if (adxArg !== undefined) params.adxMin = Number(adxArg);
     const { trades, pnl } = generateSignals(candles, params);
 
 // --- NEW: metrikos

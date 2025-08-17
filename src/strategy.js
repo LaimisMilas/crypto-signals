@@ -1,6 +1,5 @@
 // src/strategy.js
-import { rsi, atr, ema } from './backtest/indicators.js';
-import { adx } from './backtest/indicators.js';
+import { rsi, atr, ema, adx } from './backtest/indicators.js';
 import { runBacktest } from './backtest/engine.js';
 
 /**
