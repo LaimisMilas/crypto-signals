@@ -4,7 +4,8 @@ import { Pool } from 'pg';
 import fs from 'fs';
 import { generateSignals } from '../src/strategy.js';
 
-const [,, start='2024-01-01', end='2024-03-01'] = process.argv;
+const [,, start='2024-01-01', end='2024-03-01', writeFlag] = process.argv;
+const WRITE_BEST = writeFlag === '--write-best';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -106,6 +107,22 @@ function computeMetrics(trades, pnl) {
   ].join('\n');
   fs.writeFileSync('optimize.csv', csv);
   console.log('Saved optimize.csv');
+  if (WRITE_BEST && results.length) {
+    const best = results[0];
+    const paramsPath = new URL('../config/params.json', import.meta.url);
+    const newParams = {
+        rsiBuy: best.rsiBuy,
+        rsiSell: best.rsiSell,
+        atrMult: best.atrMult,
+        adxMin: best.adxMin,
+        useTrendFilter: true,
+        feePct: 0.0005,
+        slippagePct: 0.0005,
+        positionSize: 1
+    };
+    fs.writeFileSync(paramsPath, JSON.stringify(newParams, null, 2));
+    console.log('Updated config/params.json with best params:', newParams);
+    }
 
   await pool.end();
 })().catch(async e => {

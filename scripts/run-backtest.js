@@ -2,6 +2,8 @@
 import fs from 'fs';
 import 'dotenv/config';
 import { Pool } from 'pg';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { generateSignals } from '../src/strategy.js';
 
 const [,, start='2024-01-01', end='2024-03-01'] = process.argv;
@@ -28,16 +30,11 @@ async function main() {
         volume: Number(r.volume),
     }));
 
-    const { trades, pnl } = generateSignals(candles, {
-        rsiBuy: 25,
-        rsiSell: 65,
-        atrMult: 2,
-        adxMin: 15,        // buvo 20
-        useTrendFilter: true,
-        feePct: 0.0005,
-        slippagePct: 0.0005,
-        positionSize: 1,
-    });
+    // params iš config/params.json
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const paramsPath = path.join(__dirname, '..', 'config', 'params.json');
+    const params = JSON.parse(fs.readFileSync(paramsPath, 'utf-8'));
+    const { trades, pnl } = generateSignals(candles, params);
 
 // --- NEW: metrikos
     const closed = trades.filter(t => 'pnl' in t);
