@@ -3,6 +3,7 @@ import 'dotenv/config';
 import { Pool } from 'pg';
 import fs from 'fs';
 import { generateSignals } from '../src/strategy.js';
+import { loadCandles, computeMetrics } from '../src/backtest/utils.js';
 
 const args = process.argv.slice(2);
 const start = args[0] ?? '2024-01-01';
@@ -19,51 +20,8 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-async function loadCandles(s, e) {
-  const startMs = Date.parse(s);
-  const endMs = Date.parse(e);
-  const { rows } = await pool.query(
-    `SELECT ts, open, high, low, close, volume
-     FROM candles
-     WHERE ts >= $1::bigint AND ts < $2::bigint
-     ORDER BY ts ASC`,
-    [startMs, endMs]
-  );
-  return rows.map(r => ({
-    ts: Number(r.ts),
-    open: Number(r.open),
-    high: Number(r.high),
-    low: Number(r.low),
-    close: Number(r.close),
-    volume: Number(r.volume),
-  }));
-}
-
-function computeMetrics(trades, pnl) {
-  const closed = trades.filter(t => typeof t.pnl === 'number');
-  let eq = 0, peak = -Infinity, maxDD = 0;
-  let wins = 0;
-  for (const t of closed) {
-    eq += t.pnl;
-    if (eq > peak) peak = eq;
-    const dd = peak - eq;
-    if (dd > maxDD) maxDD = dd;
-    if (t.pnl > 0) wins++;
-  }
-  const winRate = closed.length ? (wins / closed.length) * 100 : 0;
-  const score = pnl / (1 + Math.max(0, maxDD));
-  return {
-    trades: trades.length,
-    closedTrades: closed.length,
-    winRate: Number(winRate.toFixed(2)),
-    pnl: Number(pnl.toFixed(2)),
-    maxDrawdown: Number(maxDD.toFixed(2)),
-    score: Number(score.toFixed(4)),
-  };
-}
-
 (async () => {
-  const candles = await loadCandles(start, end);
+  const candles = await loadCandles(pool, start, end);
   if (candles.length < 300) {
     console.error('Not enough candles for optimization');
     process.exit(1);
