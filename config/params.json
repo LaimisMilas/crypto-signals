@@ -1,0 +1,10 @@
+{
+  "rsiBuy": 25,
+  "rsiSell": 75,
+  "atrMult": 2.5,
+  "adxMin": 18,
+  "useTrendFilter": true,
+  "feePct": 0.0005,
+  "slippagePct": 0.0005,
+  "positionSize": 1
+}
