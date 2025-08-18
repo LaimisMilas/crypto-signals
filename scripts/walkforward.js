@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import 'dotenv/config';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { Pool } from 'pg';
 import { generateSignals } from '../src/strategy.js';
 import { loadCandles, computeMetrics } from '../src/backtest/utils.js';
@@ -10,12 +12,11 @@ let start = args[0] || '2023-01-01';
 let end = args[1] || '2024-01-01';
 let trainDays = 60;
 let testDays = 30;
+
+// optional params --train X --test Y
 for (let i = 2; i < args.length; i++) {
-  if (args[i] === '--train') {
-    trainDays = Number(args[++i]);
-  } else if (args[i] === '--test') {
-    testDays = Number(args[++i]);
-  }
+  if (args[i] === '--train') trainDays = Number(args[++i]);
+  if (args[i] === '--test')  testDays  = Number(args[++i]);
 }
 
 const dayMs = 24 * 60 * 60 * 1000;
@@ -24,30 +25,56 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
+// === CSV I/O ===
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const outCsvPath = path.join(__dirname, '..', 'walkforward.csv');
+const headers = [
+  'trainStart','trainEnd','testStart','testEnd',
+  'rsiBuy','rsiSell','atrMult','adxMin',
+  'trades','closedTrades','winRate','pnl','maxDrawdown','score'
+];
+
+function ensureCsvHeader() {
+  if (!fs.existsSync(outCsvPath) || fs.readFileSync(outCsvPath, 'utf-8').trim() === '') {
+    fs.writeFileSync(outCsvPath, headers.join(',') + '\n');
+  }
+}
+
+function toISODate(ms) {
+  const d = new Date(ms);
+  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
 (async () => {
-  const results = [];
+  ensureCsvHeader();
+
   const startMs = Date.parse(start);
-  const endMs = Date.parse(end);
+  const endMs   = Date.parse(end);
   let cur = startMs;
 
   while (true) {
     const trainStart = cur;
-    const trainEnd = trainStart + trainDays * dayMs;
-    const testStart = trainEnd;
-    const testEnd = testStart + testDays * dayMs;
+    const trainEnd   = trainStart + trainDays * dayMs;
+    const testStart  = trainEnd;
+    const testEnd    = testStart + testDays * dayMs;
     if (testEnd > endMs) break;
 
     const trainCandles = await loadCandles(pool, trainStart, trainEnd);
-    if (trainCandles.length < 300) break;
+    if (trainCandles.length < 300) {
+      console.warn('Per mažai žvakių treniravimo lange – stabdom walk-forward.');
+      break;
+    }
 
+    // grid kaip optimize.js
     const grid = {
-      rsiBuy: [25, 30, 35],
+      rsiBuy:  [25, 30, 35],
       rsiSell: [65, 70, 75],
       atrMult: [1.5, 2, 2.5],
-      adxMin: [12, 15, 18, 20],
+      adxMin:  [12, 15, 18, 20],
     };
 
-    let best = null;
+    // TRAIN: parenkam best parametrus
+    let best = null; // { rsiBuy,rsiSell,atrMult,adxMin, ...metrics }
     for (const rBuy of grid.rsiBuy) {
       for (const rSell of grid.rsiSell) {
         for (const mult of grid.atrMult) {
@@ -64,58 +91,64 @@ const pool = new Pool({
             });
             const m = computeMetrics(trades, pnl);
             if (!best || m.score > best.score) {
-              best = { params: { rsiBuy: rBuy, rsiSell: rSell, atrMult: mult, adxMin }, score: m.score };
+              best = { rsiBuy: rBuy, rsiSell: rSell, atrMult: mult, adxMin, ...m };
             }
           }
         }
       }
     }
 
-    if (!best) break;
+    if (!best) {
+      console.warn('Nepavyko atrinkti geriausių parametrų – stabdom.');
+      break;
+    }
 
+    // TEST: su best paramais
     const testCandles = await loadCandles(pool, testStart, testEnd);
     const { trades: testTrades, pnl: testPnl } = generateSignals(testCandles, {
-      ...best.params,
+      rsiBuy: best.rsiBuy,
+      rsiSell: best.rsiSell,
+      atrMult: best.atrMult,
+      adxMin: best.adxMin,
       useTrendFilter: true,
       feePct: 0.0005,
       slippagePct: 0.0005,
       positionSize: 1,
     });
-    const metrics = computeMetrics(testTrades, testPnl);
+    const testM = computeMetrics(testTrades, testPnl);
 
-    const line = {
-      trainStart: new Date(trainStart).toISOString().slice(0, 10),
-      trainEnd: new Date(trainEnd).toISOString().slice(0, 10),
-      testStart: new Date(testStart).toISOString().slice(0, 10),
-      testEnd: new Date(testEnd).toISOString().slice(0, 10),
-      rsiBuy: best.params.rsiBuy,
-      rsiSell: best.params.rsiSell,
-      atrMult: best.params.atrMult,
-      adxMin: best.params.adxMin,
-      pnl: metrics.pnl,
-      winRate: metrics.winRate,
-      maxDrawdown: metrics.maxDrawdown,
+    const row = {
+      trainStart: toISODate(trainStart),
+      trainEnd:   toISODate(trainEnd),
+      testStart:  toISODate(testStart),
+      testEnd:    toISODate(testEnd),
+      rsiBuy:     best.rsiBuy,
+      rsiSell:    best.rsiSell,
+      atrMult:    best.atrMult,
+      adxMin:     best.adxMin,
+      trades:     testM.trades,
+      closedTrades: testM.closedTrades,
+      winRate:    testM.winRate,
+      pnl:        testM.pnl,
+      maxDrawdown:testM.maxDrawdown,
+      score:      testM.score,
     };
-    results.push(line);
 
-    console.log(`Train ${line.trainStart}-${line.trainEnd}, Test ${line.testStart}-${line.testEnd}, Params ${JSON.stringify(best.params)}, PnL ${metrics.pnl.toFixed(2)}, WinRate ${metrics.winRate.toFixed(2)}, MaxDD ${metrics.maxDrawdown.toFixed(2)}`);
+    // log į konsolę
+    console.log('\n=== WALK-FORWARD FOLD ===');
+    console.log(row);
 
-    cur += testDays * dayMs;
+    // append į CSV
+    const line = headers.map(h => row[h]).join(',') + '\n';
+    fs.appendFileSync(outCsvPath, line);
+
+    // slenkam langą per test periodą
+    cur = testEnd;
   }
 
-  if (results.length) {
-    const headers = ['trainStart','trainEnd','testStart','testEnd','rsiBuy','rsiSell','atrMult','adxMin','pnl','winRate','maxDrawdown'];
-    const csv = [headers.join(','), ...results.map(r => headers.map(h => r[h]).join(','))].join('\n');
-    fs.writeFileSync('walkforward.csv', csv);
-
-    const avgPnL = results.reduce((s,r) => s + r.pnl, 0) / results.length;
-    const avgWin = results.reduce((s,r) => s + r.winRate, 0) / results.length;
-    const avgDD = results.reduce((s,r) => s + r.maxDrawdown, 0) / results.length;
-    console.log(`Average PnL ${avgPnL.toFixed(2)}, Avg WinRate ${avgWin.toFixed(2)}, Avg MaxDD ${avgDD.toFixed(2)}`);
-  }
-
+  console.log(`\nSaved ${outCsvPath}`);
   await pool.end();
-})().catch(async e => {
+})().catch(async (e) => {
   console.error(e);
   await pool.end();
   process.exit(1);
