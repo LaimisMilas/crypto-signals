@@ -82,14 +82,12 @@
   }
 
   async function main() {
-    // bars from walkforward.csv
-    const csv1 = await fetch('./walkforward.csv').then(r=>r.text());
+    const csv1 = await fetch('/walkforward.csv').then(r=>r.text());
     const rows1 = await parseCSV(csv1);
     const pnlRows = rows1.map((r, i) => ({ idx: i+1, pnl: +r.pnl || 0 }));
     drawBars(pnlRows);
 
-    // aggregated line from walkforward-agg.csv
-    const csv2 = await fetch('./walkforward-agg.csv').then(r=>r.text());
+    const csv2 = await fetch('/walkforward-agg.csv').then(r=>r.text());
     const rows2 = await parseCSV(csv2);
     const lineRows = rows2.map(r => ({ idx: +r.idx, equity: +r.equity }));
     drawLine(lineRows);

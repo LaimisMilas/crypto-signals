@@ -13,7 +13,6 @@ let end = args[1] || '2024-01-01';
 let trainDays = 60;
 let testDays = 30;
 
-// optional params --train X --test Y
 for (let i = 2; i < args.length; i++) {
   if (args[i] === '--train') trainDays = Number(args[++i]);
   if (args[i] === '--test')  testDays  = Number(args[++i]);
@@ -25,9 +24,12 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// === CSV I/O ===
+// === output -> client/public ===
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const outCsvPath = path.join(__dirname, '..', 'walkforward.csv');
+const clientPublicDir = path.join(__dirname, '..', 'client', 'public');
+if (!fs.existsSync(clientPublicDir)) fs.mkdirSync(clientPublicDir, { recursive: true });
+
+const outCsvPath = path.join(clientPublicDir, 'walkforward.csv');
 const headers = [
   'trainStart','trainEnd','testStart','testEnd',
   'rsiBuy','rsiSell','atrMult','adxMin',
@@ -42,7 +44,7 @@ function ensureCsvHeader() {
 
 function toISODate(ms) {
   const d = new Date(ms);
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+  return d.toISOString().slice(0, 10);
 }
 
 (async () => {
@@ -65,7 +67,6 @@ function toISODate(ms) {
       break;
     }
 
-    // grid kaip optimize.js
     const grid = {
       rsiBuy:  [25, 30, 35],
       rsiSell: [65, 70, 75],
@@ -73,8 +74,7 @@ function toISODate(ms) {
       adxMin:  [12, 15, 18, 20],
     };
 
-    // TRAIN: parenkam best parametrus
-    let best = null; // { rsiBuy,rsiSell,atrMult,adxMin, ...metrics }
+    let best = null;
     for (const rBuy of grid.rsiBuy) {
       for (const rSell of grid.rsiSell) {
         for (const mult of grid.atrMult) {
@@ -103,7 +103,6 @@ function toISODate(ms) {
       break;
     }
 
-    // TEST: su best paramais
     const testCandles = await loadCandles(pool, testStart, testEnd);
     const { trades: testTrades, pnl: testPnl } = generateSignals(testCandles, {
       rsiBuy: best.rsiBuy,
@@ -134,15 +133,12 @@ function toISODate(ms) {
       score:      testM.score,
     };
 
-    // log į konsolę
     console.log('\n=== WALK-FORWARD FOLD ===');
     console.log(row);
 
-    // append į CSV
     const line = headers.map(h => row[h]).join(',') + '\n';
     fs.appendFileSync(outCsvPath, line);
 
-    // slenkam langą per test periodą
     cur = testEnd;
   }
 

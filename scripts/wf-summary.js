@@ -1,9 +1,16 @@
 #!/usr/bin/env node
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const CSV = 'walkforward.csv';
-const OUT_JSON = 'walkforward-summary.json';
-const OUT_AGG = 'walkforward-agg.csv';
+// paths -> client/public
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const clientPublicDir = path.join(__dirname, '..', 'client', 'public');
+if (!fs.existsSync(clientPublicDir)) fs.mkdirSync(clientPublicDir, { recursive: true });
+
+const CSV = path.join(clientPublicDir, 'walkforward.csv');
+const OUT_JSON = path.join(clientPublicDir, 'walkforward-summary.json');
+const OUT_AGG = path.join(clientPublicDir, 'walkforward-agg.csv');
 
 if (!fs.existsSync(CSV)) {
   console.error(`${CSV} nerastas. Pirmiau paleisk: node scripts/walkforward.js ...`);
