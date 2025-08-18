@@ -8,10 +8,8 @@ import { db } from './storage/db.js';
 import { createSingleUseInviteLink } from './notify/telegram.js';
 import { createCheckoutSession, stripeWebhook } from './payments/stripe.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(cookieParser());
@@ -65,10 +63,15 @@ app.get('/api/telegram-invite', async (req, res) => {
   }
 });
 
-// Serve static (React build copied to /public)
-app.use(express.static(path.join(__dirname, '../public')));
+// Static files
+app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// SPA fallback — bet koks kitas GET, kuris nepateko į API/static, grąžina index.html
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => console.log(`Server listening on ${PORT}`));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on :${PORT}`);
+});
