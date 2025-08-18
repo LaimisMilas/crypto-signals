@@ -58,20 +58,20 @@ export default function Backtests() {
       <div style={{overflowX:'auto'}}>
         <table cellPadding="6" cellSpacing="0" style={{borderCollapse:'collapse', width:'100%'}}>
           <thead>
-            <tr>
-              {['trainStart','trainEnd','testStart','testEnd','rsiBuy','rsiSell','atrMult','adxMin','trades','closedTrades','winRate','pnl','maxDrawdown','score'].map(h=>(
-                <th key={h} style={{borderBottom:'1px solid #ddd', textAlign:'left'}}>{h}</th>
-              ))}
-            </tr>
+          <tr>
+            {['trainStart','trainEnd','testStart','testEnd','rsiBuy','rsiSell','atrMult','adxMin','trades','closedTrades','winRate','pnl','maxDrawdown','score'].map(h=>(
+              <th key={h} style={{borderBottom:'1px solid #ddd', textAlign:'left'}}>{h}</th>
+            ))}
+          </tr>
           </thead>
           <tbody>
-            {rows.map((r,i)=>(
-              <tr key={i} style={{borderBottom:'1px solid #f0f0f0'}}>
-                <td>{r.trainStart}</td><td>{r.trainEnd}</td><td>{r.testStart}</td><td>{r.testEnd}</td>
-                <td>{r.rsiBuy}</td><td>{r.rsiSell}</td><td>{r.atrMult}</td><td>{r.adxMin}</td>
-                <td>{r.trades}</td><td>{r.closedTrades}</td><td>{r.winRate}</td><td>{r.pnl}</td><td>{r.maxDrawdown}</td><td>{r.score}</td>
-              </tr>
-            ))}
+          {rows.map((r,i)=>(
+            <tr key={i} style={{borderBottom:'1px solid #f0f0f0'}}>
+              <td>{r.trainStart}</td><td>{r.trainEnd}</td><td>{r.testStart}</td><td>{r.testEnd}</td>
+              <td>{r.rsiBuy}</td><td>{r.rsiSell}</td><td>{r.atrMult}</td><td>{r.adxMin}</td>
+              <td>{r.trades}</td><td>{r.closedTrades}</td><td>{r.winRate}</td><td>{r.pnl}</td><td>{r.maxDrawdown}</td><td>{r.score}</td>
+            </tr>
+          ))}
           </tbody>
         </table>
       </div>
