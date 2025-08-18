@@ -35,6 +35,8 @@ async function main() {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const paramsPath = path.join(__dirname, '..', 'config', 'params.json');
     const params = JSON.parse(fs.readFileSync(paramsPath, 'utf-8'));
+    const clientPublicDir = path.join(__dirname, '..', 'client', 'public');
+    if (!fs.existsSync(clientPublicDir)) fs.mkdirSync(clientPublicDir, { recursive: true });
     if (adxArg !== undefined) params.adxMin = Number(adxArg);
     const { trades, pnl } = generateSignals(candles, params);
 
@@ -47,8 +49,8 @@ async function main() {
 // equity curve
     let eq = 0;
     const equity = [];
-    for (const t of trades) {
-        if ('pnl' in t) eq += t.pnl;
+    for (const t of closed) {
+        eq += t.pnl;
         equity.push({ ts: Number(t.ts), equity: eq });
     }
 
@@ -61,7 +63,7 @@ async function main() {
     }
 
 // išsaugom
-    fs.writeFileSync('metrics.json', JSON.stringify({
+    fs.writeFileSync(path.join(clientPublicDir, 'metrics.json'), JSON.stringify({
         trades: trades.length,
         closedTrades: closed.length,
         pnl,
@@ -70,10 +72,10 @@ async function main() {
     }, null, 2));
 
     let csv = 'ts,equity\n' + equity.map(r => `${r.ts},${r.equity}`).join('\n');
-    fs.writeFileSync('backtest.csv', csv);
+    fs.writeFileSync(path.join(clientPublicDir, 'backtest.csv'), csv);
 
     console.log(`Trades: ${trades.length}, Closed: ${closed.length}, WinRate: ${winRate.toFixed(1)}%, PnL: ${pnl.toFixed(2)}, MaxDD: ${maxDD.toFixed(2)}`);
-    console.log('Saved: metrics.json, backtest.csv');
+    console.log('Saved: client/public/metrics.json, client/public/backtest.csv');
 
     console.log(`Trades: ${trades.length}, PnL: ${pnl.toFixed(2)}`);
     const last = trades.slice(-10);

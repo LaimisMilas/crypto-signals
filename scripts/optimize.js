@@ -2,6 +2,8 @@
 import 'dotenv/config';
 import { Pool } from 'pg';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { generateSignals } from '../src/strategy.js';
 import { loadCandles, computeMetrics } from '../src/backtest/utils.js';
 
@@ -51,11 +53,16 @@ const pool = new Pool({
           });
           const m = computeMetrics(trades, pnl);
           results.push({
-            rsiBuy: rBuy,
-            rsiSell: rSell,
-            atrMult: mult,
-            adxMin,
-            ...m,
+            rsiBuy: Number(rBuy),
+            rsiSell: Number(rSell),
+            atrMult: Number(mult),
+            adxMin: Number(adxMin),
+            trades: Number(m.trades || 0),
+            closedTrades: Number(m.closedTrades || 0),
+            winRate: Number((m.winRate ?? 0).toFixed(2)),
+            pnl: Number((m.pnl ?? 0).toFixed(2)),
+            maxDrawdown: Number((m.maxDrawdown ?? 0).toFixed(2)),
+            score: Number((m.score ?? 0).toFixed(2)),
           });
         }
       }
@@ -70,8 +77,12 @@ const pool = new Pool({
     headers.join(','),
     ...results.map(r => headers.map(h => r[h]).join(',')),
   ].join('\n');
-  fs.writeFileSync('optimize.csv', csv);
-  console.log('Saved optimize.csv');
+
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const clientPublicDir = path.join(__dirname, '..', 'client', 'public');
+  if (!fs.existsSync(clientPublicDir)) fs.mkdirSync(clientPublicDir, { recursive: true });
+  fs.writeFileSync(path.join(clientPublicDir, 'optimize.csv'), csv);
+  console.log('Saved: client/public/optimize.csv');
   if (WRITE_BEST && results.length) {
     const best = results[0];
     const paramsPath = new URL('../config/params.json', import.meta.url);
