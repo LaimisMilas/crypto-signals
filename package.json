@@ -13,7 +13,8 @@
     "fetch:binance": "node scripts/fetch-binance.js",
     "opt": "node scripts/optimize.js",
     "signals": "node scripts/generate-signals.js",
-    "wf": "node scripts/walkforward.js"
+    "wf": "node scripts/walkforward.js",
+    "wf:summary": "node scripts/wf-summary.js"
   },
   "dependencies": {
     "axios": "^1.7.2",
