@@ -1,26 +1,37 @@
 import { Link, Routes, Route, Navigate } from 'react-router-dom';
-import Home from './pages/Home.jsx';
 import Backtests from './pages/Backtests.jsx';
+import Analytics from './pages/Analytics.jsx';
+
+function Home() {
+  return (
+    <div style={{padding:16}}>
+      <h1>Crypto Signals</h1>
+      <p>Sveikas! Pasirink puslapį viršuje.</p>
+    </div>
+  );
+}
 
 export default function App() {
+  const linkStyle = { textDecoration:'none', padding:'6px 8px', borderRadius:6 };
+  const navStyle = { display:'flex', alignItems:'center', gap:12, padding:'12px 16px', borderBottom:'1px solid #eee' };
+
   return (
     <div style={{fontFamily:'system-ui, Arial', minHeight:'100vh'}}>
-      <header style={{
-        display:'flex', alignItems:'center', gap:16,
-        padding:'12px 16px', borderBottom:'1px solid #eee'
-      }}>
-        <Link to="/" style={{fontWeight:700, textDecoration:'none'}}>Home</Link>
-        <Link to="/backtests" style={{textDecoration:'none'}}>Backtests</Link>
+      <header style={navStyle}>
+        <Link to="/" style={{...linkStyle, fontWeight:700}}>Home</Link>
+        <Link to="/backtests" style={linkStyle}>Backtests</Link>
+        <Link to="/analytics" style={linkStyle}>Analytics</Link>
       </header>
 
       <main style={{padding:'16px'}}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/backtests" element={<Backtests />} />
-          {/* Bet koks nežinomas kelias -> į Home (arba gali nukreipti į /backtests) */}
+          <Route path="/analytics" element={<Analytics />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </div>
   );
 }
+
