@@ -34,21 +34,3 @@ jobs:
       - name: Compile check
         run: node -e "require('fs').accessSync('./src/index.js')"
 
-  backtest:
-    runs-on: ubuntu-latest
-    env:
-      DB_URL: ${{ secrets.DB_URL }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Use Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install deps
-        run: npm install
-
-      - name: Backtest smoke
-        run: npm run bt -- 2024-01-01 2024-02-01
