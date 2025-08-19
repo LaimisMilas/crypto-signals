@@ -1,3 +1,4 @@
+import fs from 'fs/promises';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -60,6 +61,65 @@ app.get('/api/telegram-invite', async (req, res) => {
     }
   } catch (e) {
     return res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// --- /analytics route ---
+const pubDir = path.join(__dirname, '..', 'client', 'public');
+
+// small CSV -> array of objects (numbers if possible)
+function parseCsv(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length === 0) return [];
+  const headers = lines[0].split(',').map(h => h.trim());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(',').map(x => x.trim());
+    if (parts.length !== headers.length) continue;
+    const obj = {};
+    headers.forEach((h, idx) => {
+      const v = parts[idx];
+      const n = Number(v);
+      obj[h] = Number.isFinite(n) ? n : v; // convert numerics
+    });
+    rows.push(obj);
+  }
+  return rows;
+}
+
+async function safeReadJson(file) {
+  try {
+    const data = await fs.readFile(path.join(pubDir, file), 'utf-8');
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
+async function safeReadCsv(file, limit = null) {
+  try {
+    const data = await fs.readFile(path.join(pubDir, file), 'utf-8');
+    const rows = parseCsv(data);
+    return Array.isArray(limit) ? rows.slice(0, limit) : (typeof limit === 'number' ? rows.slice(0, limit) : rows);
+  } catch {
+    return [];
+  }
+}
+
+app.get('/analytics', async (_req, res) => {
+  try {
+    const backtest = await safeReadJson('metrics.json'); // may be null
+    const optimize = await safeReadCsv('optimize.csv', 50); // array
+    const walkforward = await safeReadJson('walkforward-summary.json'); // may be null
+
+    res.json({
+      backtest: backtest ?? {},
+      optimize: optimize ?? [],
+      walkforward: walkforward ?? {},
+    });
+  } catch (e) {
+    console.error('[/analytics] error:', e);
+    res.status(500).json({ error: 'analytics_failed' });
   }
 });
 
