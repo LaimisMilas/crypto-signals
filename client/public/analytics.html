@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="lt">
+<head>
+  <meta charset="utf-8" />
+  <title>Analytics</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; color: #111; }
+    h1 { margin-bottom: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); gap: 16px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fff; }
+    .muted { color: #6b7280; font-size: 12px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: right; }
+    th { text-align: right; color: #374151; font-weight: 600; }
+    td:first-child, th:first-child { text-align: left; }
+    .kpis { font-size: 28px; font-weight: 700; }
+    .section { margin-top: 24px; }
+    code { background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Analytics</h1>
+  <p class="muted">/analytics API santrauka (Backtest, Optimize, Walkforward)</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="muted">Backtest PnL</div>
+      <div id="bt-pnl" class="kpis">–</div>
+      <div class="muted">WinRate: <span id="bt-win">–</span>, MaxDD: <span id="bt-dd">–</span></div>
+    </div>
+    <div class="card">
+      <div class="muted">Walkforward PnL</div>
+      <div id="wf-pnl" class="kpis">–</div>
+      <div class="muted">WinRate: <span id="wf-win">–</span>, MaxDD: <span id="wf-dd">–</span>, Folds: <span id="wf-folds">–</span></div>
+    </div>
+  </div>
+
+  <div class="section card">
+    <h3 style="margin:0 0 8px 0;">Optimize – Top 50</h3>
+    <div class="muted">Iš <code>optimize.csv</code></div>
+    <div style="overflow:auto;">
+      <table id="opt-table">
+        <thead>
+          <tr>
+            <th>rsiBuy</th><th>rsiSell</th><th>atrMult</th><th>adxMin</th>
+            <th>trades</th><th>closedTrades</th><th>winRate</th><th>pnl</th><th>maxDrawdown</th><th>score</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    async function load() {
+      try {
+        const res = await fetch('/analytics');
+        const data = await res.json();
+
+        const bt = data.backtest || {};
+        const wf = data.walkforward || {};
+        const opt = Array.isArray(data.optimize) ? data.optimize : [];
+
+        // Backtest KPI
+        document.getElementById('bt-pnl').textContent = num(bt.pnl);
+        document.getElementById('bt-win').textContent = pct(bt.winRate);
+        document.getElementById('bt-dd').textContent  = num(bt.maxDrawdown);
+
+        // Walkforward KPI
+        document.getElementById('wf-pnl').textContent   = num(wf.pnl);
+        document.getElementById('wf-win').textContent   = pct(wf.winRate);
+        document.getElementById('wf-dd').textContent    = num(wf.maxDrawdown);
+        document.getElementById('wf-folds').textContent = wf.folds ?? '–';
+
+        // Optimize table
+        const tbody = document.querySelector('#opt-table tbody');
+        tbody.innerHTML = '';
+        for (const r of opt) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = [
+            r.rsiBuy, r.rsiSell, r.atrMult, r.adxMin,
+            r.trades, r.closedTrades,
+            fix2(r.winRate), fix2(r.pnl), fix2(r.maxDrawdown), fix4(r.score)
+          ].map(c => `<td>${c ?? 0}</td>`).join('');
+          tbody.appendChild(tr);
+        }
+      } catch (e) {
+        console.error('analytics.html load error', e);
+      }
+    }
+
+    const fix2 = v => (Number.isFinite(+v) ? (+v).toFixed(2) : '0.00');
+    const fix4 = v => (Number.isFinite(+v) ? (+v).toFixed(4) : '0.0000');
+    const num  = v => Number.isFinite(+v) ? (+v).toFixed(2) : '0.00';
+    const pct  = v => Number.isFinite(+v) ? `${(+v).toFixed(2)}%` : '0.00%';
+
+    load();
+  </script>
+</body>
+</html>
