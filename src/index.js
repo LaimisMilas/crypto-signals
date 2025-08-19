@@ -123,6 +123,97 @@ app.get('/analytics', async (_req, res) => {
   }
 });
 
+// --- EXTRA analytics endpoints (place after existing /analytics route) ---
+
+function parseCsvRows(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length === 0) return { headers: [], rows: [] };
+  const headers = lines[0].split(',').map(h => h.trim());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(',').map(x => x.trim());
+    if (parts.length !== headers.length) continue;
+    const obj = {};
+    headers.forEach((h, idx) => {
+      const v = parts[idx];
+      const n = Number(v);
+      obj[h] = Number.isFinite(n) ? n : v;
+    });
+    rows.push(obj);
+  }
+  return { headers, rows };
+}
+
+app.get('/analytics/equity', async (_req, res) => {
+  try {
+    let backtest = [];
+    let walkforward = [];
+
+    // backtest.csv (ts,equity)
+    try {
+      const bt = await fs.readFile(path.join(pubDir, 'backtest.csv'), 'utf-8');
+      const { rows } = parseCsvRows(bt);
+      // normalize types/fields
+      backtest = rows
+        .filter(r => Number.isFinite(r.ts) && Number.isFinite(r.equity))
+        .map(r => ({ ts: Number(r.ts), equity: Number(r.equity) }));
+    } catch {}
+
+    // walkforward-agg.csv (idx,equity)
+    try {
+      const wf = await fs.readFile(path.join(pubDir, 'walkforward-agg.csv'), 'utf-8');
+      const { rows } = parseCsvRows(wf);
+      walkforward = rows
+        .filter(r => Number.isFinite(r.idx) && Number.isFinite(r.equity))
+        .map(r => ({ idx: Number(r.idx), equity: Number(r.equity) }));
+    } catch {}
+
+    res.json({ backtest, walkforward });
+  } catch (e) {
+    console.error('[/analytics/equity] error:', e);
+    res.json({ backtest: [], walkforward: [] });
+  }
+});
+
+app.get('/analytics/optimize', async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10), 1), 500);
+    const sort = String(req.query.sort || 'score');
+    const dir  = (String(req.query.dir || 'desc').toLowerCase() === 'asc') ? 'asc' : 'desc';
+
+    const allowed = new Set(['rsiBuy','rsiSell','atrMult','adxMin','trades','closedTrades','winRate','pnl','maxDrawdown','score']);
+
+    let rows = [];
+    try {
+      const csv = await fs.readFile(path.join(pubDir, 'optimize.csv'), 'utf-8');
+      const parsed = parseCsvRows(csv).rows;
+      rows = parsed.map(r => {
+        const out = {};
+        for (const k of Object.keys(r)) {
+          const n = Number(r[k]);
+          out[k] = Number.isFinite(n) ? n : r[k];
+        }
+        return out;
+      });
+    } catch {
+      // no file
+    }
+
+    if (rows.length && allowed.has(sort)) {
+      rows.sort((a, b) => {
+        const av = a[sort] ?? 0;
+        const bv = b[sort] ?? 0;
+        return dir === 'asc' ? (av - bv) : (bv - av);
+      });
+    }
+
+    res.json(rows.slice(0, limit));
+  } catch (e) {
+    console.error('[/analytics/optimize] error:', e);
+    res.json([]);
+  }
+});
+
 // Static files
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
