@@ -51,6 +51,7 @@ jobs:
           TELEGRAM_PRIVATE_CHAT_ID: ${{ secrets.TELEGRAM_PRIVATE_CHAT_ID }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}                         # Neon: ...?sslmode=require
         run: |
+          BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           gcloud run deploy "$SERVICE" \
             --project "$PROJECT_ID" \
             --region "$REGION" \
@@ -64,6 +65,8 @@ jobs:
             --set-env-vars "TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN" \
             --set-env-vars "TELEGRAM_PRIVATE_CHAT_ID=$TELEGRAM_PRIVATE_CHAT_ID" \
             --set-env-vars "DATABASE_URL=$DATABASE_URL" \
+            --set-env-vars "GIT_SHA=$GITHUB_SHA" \
+            --set-env-vars "BUILD_TIME=$BUILD_TIME" \
             --concurrency=80 \
             --cpu=1 --memory=512Mi \
             --min-instances=0 --max-instances=5

@@ -10,6 +10,7 @@ import { createSingleUseInviteLink } from './notify/telegram.js';
 import { createCheckoutSession, stripeWebhook } from './payments/stripe.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const publicDir = path.join(__dirname, '..', 'client', 'public');
 const app = express();
 
 app.use(cors());
@@ -21,8 +22,81 @@ app.post('/webhook/stripe', bodyParser.raw({ type: 'application/json' }), stripe
 // JSON body for general APIs
 app.use(bodyParser.json());
 
-// Health
-app.get('/health', (req, res) => res.json({ ok: true }));
+function bool(v) { return !!(v && String(v).length); }
+
+app.head('/health', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.status(200).end();
+});
+
+app.get('/health', async (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const mem = process.memoryUsage();
+  let dbOk = false;
+  try {
+    const client = await db.connect();
+    try {
+      await client.query('SELECT 1');
+      dbOk = true;
+    } finally {
+      client.release();
+    }
+  } catch (_) {
+    dbOk = false;
+  }
+  res.json({
+    status: (dbOk ? 'ok' : 'degraded'),
+    uptimeSec: Math.round(process.uptime()),
+    memoryMB: {
+      rss: Math.round(mem.rss / (1024*1024)),
+      heapUsed: Math.round(mem.heapUsed / (1024*1024)),
+    },
+    env: {
+      DATABASE_URL: bool(process.env.DATABASE_URL),
+      TELEGRAM_BOT_TOKEN: bool(process.env.TELEGRAM_BOT_TOKEN),
+      STRIPE_SECRET: bool(process.env.STRIPE_SECRET),
+      STRIPE_WEBHOOK_SECRET: bool(process.env.STRIPE_WEBHOOK_SECRET),
+    },
+    db: { ok: dbOk }
+  });
+});
+
+app.get('/version', async (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  let pkg = { name: 'crypto-signals', version: '0.0.0' };
+  try {
+    const text = await fs.readFile(path.join(__dirname, '..', 'package.json'), 'utf-8');
+    pkg = JSON.parse(text);
+  } catch {}
+  res.json({
+    name: pkg.name,
+    version: pkg.version,
+    git: process.env.GIT_SHA || null,
+    builtAt: process.env.BUILD_TIME || null,
+  });
+});
+
+app.get('/download/:file', async (req, res) => {
+  const allow = new Set([
+    'backtest.csv',
+    'optimize.csv',
+    'walkforward-agg.csv',
+    'walkforward-summary.json',
+    'metrics.json'
+  ]);
+  const { file } = req.params;
+  if (!allow.has(file)) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  try {
+    const full = path.join(publicDir, file);
+    await fs.access(full);
+    res.setHeader('Content-Disposition', `attachment; filename="${file}"`);
+    res.sendFile(full);
+  } catch {
+    res.status(404).json({ error: 'Not found' });
+  }
+});
 
 // Latest signal
 app.get('/signals/latest', async (req, res) => {
@@ -65,7 +139,6 @@ app.get('/api/telegram-invite', async (req, res) => {
 });
 
 // --- /analytics route ---
-const pubDir = path.join(__dirname, '..', 'client', 'public');
 
 // small CSV -> array of objects (numbers if possible)
 function parseCsv(text) {
@@ -89,7 +162,7 @@ function parseCsv(text) {
 
 async function safeReadJson(file) {
   try {
-    const data = await fs.readFile(path.join(pubDir, file), 'utf-8');
+    const data = await fs.readFile(path.join(publicDir, file), 'utf-8');
     return JSON.parse(data);
   } catch {
     return null;
@@ -98,7 +171,7 @@ async function safeReadJson(file) {
 
 async function safeReadCsv(file, limit = null) {
   try {
-    const data = await fs.readFile(path.join(pubDir, file), 'utf-8');
+    const data = await fs.readFile(path.join(publicDir, file), 'utf-8');
     const rows = parseCsv(data);
     return Array.isArray(limit) ? rows.slice(0, limit) : (typeof limit === 'number' ? rows.slice(0, limit) : rows);
   } catch {
@@ -151,7 +224,7 @@ app.get('/analytics/equity', async (_req, res) => {
 
     // backtest.csv (ts,equity)
     try {
-      const bt = await fs.readFile(path.join(pubDir, 'backtest.csv'), 'utf-8');
+      const bt = await fs.readFile(path.join(publicDir, 'backtest.csv'), 'utf-8');
       const { rows } = parseCsvRows(bt);
       // normalize types/fields
       backtest = rows
@@ -161,7 +234,7 @@ app.get('/analytics/equity', async (_req, res) => {
 
     // walkforward-agg.csv (idx,equity)
     try {
-      const wf = await fs.readFile(path.join(pubDir, 'walkforward-agg.csv'), 'utf-8');
+      const wf = await fs.readFile(path.join(publicDir, 'walkforward-agg.csv'), 'utf-8');
       const { rows } = parseCsvRows(wf);
       walkforward = rows
         .filter(r => Number.isFinite(r.idx) && Number.isFinite(r.equity))
@@ -185,7 +258,7 @@ app.get('/analytics/optimize', async (req, res) => {
 
     let rows = [];
     try {
-      const csv = await fs.readFile(path.join(pubDir, 'optimize.csv'), 'utf-8');
+      const csv = await fs.readFile(path.join(publicDir, 'optimize.csv'), 'utf-8');
       const parsed = parseCsvRows(csv).rows;
       rows = parsed.map(r => {
         const out = {};
