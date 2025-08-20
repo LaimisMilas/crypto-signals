@@ -1,4 +1,6 @@
 {
+  "symbol": "BTCUSDT",
+  "interval": "1h",
   "rsiBuy": 25,
   "rsiSell": 65,
   "atrMult": 2,
