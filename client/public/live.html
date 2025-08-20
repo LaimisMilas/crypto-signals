@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Paper Trading Live</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h1>Paper Trading</h1>
+  <button onclick="fetch('/live/start',{method:'POST'})">Start</button>
+  <button onclick="fetch('/live/stop',{method:'POST'})">Stop</button>
+  <button onclick="fetch('/live/trades',{method:'DELETE'})">Reset</button>
+
+  <h2>Equity</h2>
+  <canvas id="chart"></canvas>
+
+  <h2>Trades</h2>
+  <table border="1"><thead><tr><th>Time</th><th>Side</th><th>Price</th><th>PnL</th></tr></thead><tbody id="tbody"></tbody></table>
+
+  <script>
+    async function refresh() {
+      const data = await fetch('/live').then(r=>r.json());
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = '';
+      (data.trades || []).slice(-10).forEach(t=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${new Date(t.ts).toISOString()}</td><td>${t.side}</td><td>${t.price}</td><td>${t.pnl??''}</td>`;
+        tbody.appendChild(tr);
+      });
+      chart.data.labels = data.trades.map(t=>new Date(t.ts).toLocaleTimeString());
+      chart.data.datasets[0].data = data.trades.map((t,i)=>10000+(data.trades.slice(0,i+1).map(x=>x.pnl||0).reduce((a,b)=>a+b,0)));
+      chart.update();
+    }
+    const ctx = document.getElementById('chart');
+    const chart = new Chart(ctx,{type:'line',data:{labels:[],datasets:[{label:'Equity',data:[]}]},options:{responsive:true}});
+    setInterval(refresh,5000);
+    refresh();
+  </script>
+</body>
+</html>
