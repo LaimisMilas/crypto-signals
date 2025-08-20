@@ -139,10 +139,10 @@ app.get('/api/telegram-invite', async (req, res) => {
   }
 });
 
-app.get('/live', (_req, res) => res.json(getLiveState()));
-app.post('/live/start', (_req, res) => { startLive(); res.json({ ok: true }); });
-app.post('/live/stop', (_req, res) => { stopLive(); res.json({ ok: true }); });
-app.delete('/live/trades', (_req, res) => { resetLive(); res.json({ ok: true }); });
+app.get('/live', async (_req, res) => res.json(await getLiveState()));
+app.post('/live/start', async (_req, res) => { await startLive(); res.json({ ok: true }); });
+app.post('/live/stop', async (_req, res) => { await stopLive(); res.json({ ok: true }); });
+app.delete('/live/trades', async (_req, res) => { await resetLive(); res.json({ ok: true }); });
 
 // --- /analytics route ---
 
