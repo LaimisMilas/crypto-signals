@@ -8,6 +8,7 @@ import bodyParser from 'body-parser';
 import { db } from './storage/db.js';
 import { createSingleUseInviteLink } from './notify/telegram.js';
 import { createCheckoutSession, stripeWebhook } from './payments/stripe.js';
+import { startLive, stopLive, resetLive, getLiveState } from './live.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'client', 'public');
@@ -137,6 +138,11 @@ app.get('/api/telegram-invite', async (req, res) => {
     return res.status(500).json({ error: 'server_error' });
   }
 });
+
+app.get('/live', (_req, res) => res.json(getLiveState()));
+app.post('/live/start', (_req, res) => { startLive(); res.json({ ok: true }); });
+app.post('/live/stop', (_req, res) => { stopLive(); res.json({ ok: true }); });
+app.delete('/live/trades', (_req, res) => { resetLive(); res.json({ ok: true }); });
 
 // --- /analytics route ---
 
