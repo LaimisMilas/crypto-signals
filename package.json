@@ -2,6 +2,10 @@
   "name": "crypto-signals",
   "version": "0.2.0",
   "type": "module",
+  "engines": {
+    "node": "20.x",
+    "npm": ">=10"
+  },
   "scripts": {
     "start": "node src/index.js",
     "dev": "node src/index.js",
