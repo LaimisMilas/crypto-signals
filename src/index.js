@@ -9,6 +9,7 @@ import { db } from './storage/db.js';
 import { createSingleUseInviteLink } from './notify/telegram.js';
 import { createCheckoutSession, stripeWebhook } from './payments/stripe.js';
 import { startLive, stopLive, resetLive, getLiveState, getLiveConfig, setLiveConfig } from './live.js';
+import { ingestOnce, getIngestHealth } from './ingest.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'client', 'public');
@@ -60,6 +61,31 @@ app.get('/health', async (_req, res) => {
     },
     db: { ok: dbOk }
   });
+});
+
+app.get('/health/ingest', async (_req, res) => {
+  try {
+    const h = await getIngestHealth();
+    res.json({ ok: true, ...h });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
+app.post('/ingest', async (req, res) => {
+  try {
+    const tk = process.env.INGEST_TOKEN;
+    if (tk) {
+      const auth = req.headers['authorization'] || '';
+      if (auth !== `Bearer ${tk}`) {
+        return res.status(401).json({ ok: false, error: 'unauthorized' });
+      }
+    }
+    const r = await ingestOnce();
+    res.json({ ok: true, ...r });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
 });
 
 app.get('/version', async (_req, res) => {
