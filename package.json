@@ -8,7 +8,7 @@
     "backtest": "node src/engine/backtest.js",
     "live": "node src/engine/live.js",
     "initdb": "node src/storage/db.js",
-    "build:client": "cd client && npm install && npm run build && cd .. && mkdir -p .keep && cp -f client/public/wf.html .keep/wf.html 2>/dev/null || true && cp -f client/public/analytics.html .keep/analytics.html 2>/dev/null || true && rm -rf public/* && cp -r client/dist/* public/ && mkdir -p public && cp -f .keep/wf.html public/wf.html 2>/dev/null || true && cp -f .keep/analytics.html public/analytics.html 2>/dev/null || true && rm -rf .keep",
+    "build:client": "cd client && npm install && npm run build && cd .. && mkdir -p .keep && cp -f client/public/wf.html .keep/wf.html 2>/dev/null || true && cp -f client/public/analytics.html .keep/analytics.html 2>/dev/null || true && cp -f client/public/health.html .keep/health.html 2>/dev/null || true && rm -rf public/* && cp -r client/dist/* public/ && mkdir -p public && cp -f .keep/wf.html public/wf.html 2>/dev/null || true && cp -f .keep/analytics.html public/analytics.html 2>/dev/null || true && cp -f .keep/health.html public/health.html 2>/dev/null || true && rm -rf .keep",
     "bt": "node scripts/run-backtest.js",
     "fetch:binance": "node scripts/fetch-binance.js",
     "opt": "node scripts/optimize.js",

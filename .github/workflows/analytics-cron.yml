@@ -82,10 +82,11 @@ jobs:
       - name: Deploy to Cloud Run
         run: |
           IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/crypto-signal/crypto-signals:latest"
+          BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           gcloud run deploy crypto-signals-prod \
             --image "$IMAGE" \
             --region "${{ env.GCP_REGION }}" \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }},TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }},STRIPE_SECRET=${{ secrets.STRIPE_SECRET }},STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}"
+            --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }},TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }},STRIPE_SECRET=${{ secrets.STRIPE_SECRET }},STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }},GIT_SHA=$GITHUB_SHA,BUILD_TIME=$BUILD_TIME"
 
