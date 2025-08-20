@@ -7,34 +7,71 @@
 </head>
 <body>
   <h1>Paper Trading</h1>
+  <form id="cfg">
+    <label>TP %: <input step="0.0001" type="number" id="tpPct"></label>
+    <label>SL %: <input step="0.0001" type="number" id="slPct"></label>
+    <label>Trail %: <input step="0.0001" type="number" id="trailPct"></label>
+    <label>Risk %: <input step="0.0001" type="number" id="riskPct"></label>
+    <label>Max open: <input step="1" type="number" id="maxOpenTrades"></label>
+    <button type="submit">Save</button>
+  </form>
   <button onclick="fetch('/live/start',{method:'POST'})">Start</button>
   <button onclick="fetch('/live/stop',{method:'POST'})">Stop</button>
   <button onclick="fetch('/live/trades',{method:'DELETE'})">Reset</button>
+
+  <h2>Open Positions</h2>
+  <table border="1"><thead><tr><th>Time</th><th>Entry</th><th>Size</th></tr></thead><tbody id="openBody"></tbody></table>
 
   <h2>Equity</h2>
   <canvas id="chart"></canvas>
 
   <h2>Trades</h2>
-  <table border="1"><thead><tr><th>Time</th><th>Side</th><th>Price</th><th>PnL</th></tr></thead><tbody id="tbody"></tbody></table>
+  <table border="1"><thead><tr><th>Time</th><th>Entry</th><th>Exit</th><th>PnL</th></tr></thead><tbody id="tbody"></tbody></table>
 
   <script>
-    async function refresh() {
-      const data = await fetch('/live').then(r=>r.json());
-      const tbody = document.getElementById('tbody');
-      tbody.innerHTML = '';
-      (data.trades || []).slice(-10).forEach(t=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${new Date(t.ts).toISOString()}</td><td>${t.side}</td><td>${t.price}</td><td>${t.pnl??''}</td>`;
-        tbody.appendChild(tr);
-      });
-      chart.data.labels = data.trades.map(t=>new Date(t.ts).toLocaleTimeString());
-      chart.data.datasets[0].data = data.trades.map((t,i)=>10000+(data.trades.slice(0,i+1).map(x=>x.pnl||0).reduce((a,b)=>a+b,0)));
-      chart.update();
-    }
-    const ctx = document.getElementById('chart');
-    const chart = new Chart(ctx,{type:'line',data:{labels:[],datasets:[{label:'Equity',data:[]}]},options:{responsive:true}});
-    setInterval(refresh,5000);
-    refresh();
+async function loadCfg() {
+  const c = await fetch('/live/config').then(r=>r.json());
+  tpPct.value = c.tpPct; slPct.value = c.slPct; trailPct.value = c.trailPct;
+  riskPct.value = c.riskPct; maxOpenTrades.value = c.maxOpenTrades;
+}
+document.getElementById('cfg').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const body = {
+    tpPct: Number(tpPct.value),
+    slPct: Number(slPct.value),
+    trailPct: Number(trailPct.value),
+    riskPct: Number(riskPct.value),
+    maxOpenTrades: Number(maxOpenTrades.value)
+  };
+  await fetch('/live/config',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  alert('Saved!');
+});
+
+async function refresh() {
+  const data = await fetch('/live').then(r=>r.json());
+  const openBody = document.getElementById('openBody');
+  openBody.innerHTML = '';
+  (data.openPositions || []).forEach(p=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${new Date(p.ts).toISOString()}</td><td>${p.entry_price}</td><td>${p.size}</td>`;
+    openBody.appendChild(tr);
+  });
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  (data.trades || []).slice(-10).forEach(t=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${new Date(t.ts).toISOString()}</td><td>${t.entry_price}</td><td>${t.exit_price??''}</td><td>${t.pnl??''}</td>`;
+    tbody.appendChild(tr);
+  });
+  chart.data.labels = data.trades.map(t=>new Date(t.ts).toLocaleTimeString());
+  chart.data.datasets[0].data = data.trades.map((t,i)=>10000+(data.trades.slice(0,i+1).map(x=>x.pnl||0).reduce((a,b)=>a+b,0)));
+  chart.update();
+}
+const ctx = document.getElementById('chart');
+const chart = new Chart(ctx,{type:'line',data:{labels:[],datasets:[{label:'Equity',data:[]}]},options:{responsive:true}});
+setInterval(refresh,5000);
+loadCfg();
+refresh();
   </script>
 </body>
 </html>
