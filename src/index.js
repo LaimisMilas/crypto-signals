@@ -8,7 +8,7 @@ import bodyParser from 'body-parser';
 import { db } from './storage/db.js';
 import { createSingleUseInviteLink } from './notify/telegram.js';
 import { createCheckoutSession, stripeWebhook } from './payments/stripe.js';
-import { startLive, stopLive, resetLive, getLiveState } from './live.js';
+import { startLive, stopLive, resetLive, getLiveState, getLiveConfig, setLiveConfig } from './live.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'client', 'public');
@@ -143,6 +143,14 @@ app.get('/live', async (_req, res) => res.json(await getLiveState()));
 app.post('/live/start', async (_req, res) => { await startLive(); res.json({ ok: true }); });
 app.post('/live/stop', async (_req, res) => { await stopLive(); res.json({ ok: true }); });
 app.delete('/live/trades', async (_req, res) => { await resetLive(); res.json({ ok: true }); });
+app.get('/live/config', async (_req, res) => {
+  const cfg = await getLiveConfig();
+  res.json(cfg);
+});
+app.post('/live/config', express.json(), async (req, res) => {
+  const saved = await setLiveConfig(req.body || {});
+  res.json(saved);
+});
 
 // --- /analytics route ---
 

@@ -41,11 +41,18 @@ export function generateSignals(candles, params = {}) {
     });
 
     // Paleidžiam esamą engine
-    const { trades, pnl } = runBacktest(
+    const { trades: rawTrades, pnl } = runBacktest(
         { ts, open, high, low, close },
         { rsiArr: rsiMasked, atrArr, emaArr },
         { rsiBuy, rsiSell, atrMult, useTrendFilter, feePct, slippagePct, positionSize }
     );
+
+    const trades = (rawTrades || []).map(t => ({
+        ts: Number(t.ts),
+        side: t.side === 'SELL' ? 'SELL' : 'BUY',
+        price: Number(t.price),
+        pnl: (t.pnl == null ? undefined : Number(t.pnl))
+    }));
 
     return { trades, pnl };
 }
