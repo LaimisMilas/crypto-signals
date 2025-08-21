@@ -6,14 +6,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 20px; color:#111; background:#fafafa; }
+    body { font-family: system-ui, sans-serif; margin:20px; color:#111; background:#fafafa; }
     h1 { margin-bottom: 8px; }
     section { margin-top: 24px; }
-    table { border-collapse: collapse; width: 100%; background:#fff; }
+    table { border-collapse: collapse; width:100%; background:#fff; }
     th, td { border-bottom:1px solid #ddd; padding:4px 6px; text-align:right; }
     th:first-child, td:first-child { text-align:left; }
-    .filters { display:flex; gap:8px; align-items:center; margin-bottom:16px; }
-    input, button { padding:4px 6px; }
+    .filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:16px; }
+    input, select, button, a.btn { padding:4px 6px; }
+    a.btn { border:1px solid #ccc; border-radius:4px; background:#fff; text-decoration:none; color:#111; }
     canvas { background:#fff; border:1px solid #ddd; border-radius:8px; padding:4px; }
     .muted { color:#666; font-size:12px; }
   </style>
@@ -21,14 +22,30 @@
 <body>
   <h1>Analytics</h1>
   <div class="filters">
+    <label>Symbol <select id="symbol"></select></label>
     <label>From <input type="date" id="from"></label>
     <label>To <input type="date" id="to"></label>
     <button id="reload">Reload</button>
+    <a id="downloadTrades" class="btn" href="/analytics/trades.csv" download>Download Trades CSV</a>
+    <a id="downloadBacktest" class="btn" href="/analytics/backtest.csv" download style="display:none;">Download Backtest CSV</a>
+    <a id="downloadOptimize" class="btn" href="/analytics/optimize.csv" download style="display:none;">Download Optimize CSV</a>
+    <a id="downloadWalkforward" class="btn" href="/analytics/walkforward.csv" download style="display:none;">Download Walkforward CSV</a>
   </div>
 
   <section>
-    <h2>Backtest equity</h2>
-    <canvas id="backtestChart" height="160"></canvas>
+    <h2>Equity</h2>
+    <canvas id="equityChart" height="160"></canvas>
+  </section>
+
+  <section>
+    <h2>Closed Trades</h2>
+    <div style="overflow:auto; margin-top:8px;">
+      <table id="tradeTable">
+        <thead><tr><th>Time</th><th>Symbol</th><th>Entry</th><th>Exit</th><th>PnL</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="tradeEmpty" class="muted"></div>
   </section>
 
   <section>
@@ -53,136 +70,152 @@
     <div id="walkEmpty" class="muted"></div>
   </section>
 
-  <section>
-    <h2>Live Trade History</h2>
-    <canvas id="liveChart" height="160"></canvas>
-    <div style="overflow:auto; margin-top:8px;">
-      <table id="tradeTable">
-        <thead>
-          <tr><th>id</th><th>time</th><th>symbol</th><th>entry</th><th>exit</th><th>pnl</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div id="tradeEmpty" class="muted"></div>
-  </section>
-
-  <script>
-    function parseCsv(text) {
-      const lines = text.trim().split(/\r?\n/);
-      if (!lines.length) return [];
-      const headers = lines[0].split(',');
-      return lines.slice(1).map(line => {
-        const parts = line.split(',');
-        const obj = {};
-        headers.forEach((h, i) => {
-          const v = parts[i];
-          const n = Number(v);
-          obj[h] = Number.isFinite(n) ? n : v;
-        });
-        return obj;
+<script>
+  function parseCsv(text) {
+    const lines = text.trim().split(/\r?\n/);
+    if (!lines.length) return [];
+    const headers = lines[0].split(',');
+    return lines.slice(1).map(line => {
+      const parts = line.split(',');
+      const obj = {};
+      headers.forEach((h, i) => {
+        const v = parts[i];
+        const n = Number(v);
+        obj[h] = Number.isFinite(n) ? n : v;
       });
-    }
-
-    function renderTable(tbl, rows) {
-      const thead = tbl.querySelector('thead');
-      const tbody = tbl.querySelector('tbody');
-      if (!rows.length) { thead.innerHTML=''; tbody.innerHTML=''; return; }
-      const headers = Object.keys(rows[0]);
-      thead.innerHTML = '<tr>' + headers.map(h=>`<th>${h}</th>`).join('') + '</tr>';
-      tbody.innerHTML = rows.map(r => '<tr>' + headers.map(h=>`<td>${r[h]}</td>`).join('') + '</tr>').join('');
-    }
-
-    let btChart = new Chart(document.getElementById('backtestChart'), {
-      type:'line', data:{labels:[], datasets:[{label:'Equity', data:[], tension:0.2, pointRadius:0}]},
-      options:{responsive:true, scales:{x:{ticks:{maxTicksLimit:6}}}}
+      return obj;
     });
-    let liveChart = new Chart(document.getElementById('liveChart'), {
-      type:'line', data:{labels:[], datasets:[{label:'Equity', data:[], tension:0.2, pointRadius:0}]},
-      options:{responsive:true, scales:{x:{ticks:{maxTicksLimit:6}}}}
-    });
+  }
 
-    async function loadBacktest() {
-      try {
-        const res = await fetch('/analytics/backtest.csv');
-        if (!res.ok) throw new Error('no');
-        const rows = parseCsv(await res.text());
-        if (!rows.length) return;
-        const labels = rows.map(r => new Date(r.ts).toLocaleString());
-        const data = rows.map(r => r.equity);
-        btChart.data.labels = labels;
-        btChart.data.datasets[0].data = data;
-        btChart.update();
-      } catch {
-        document.getElementById('backtestChart').insertAdjacentHTML('afterend', '<div class="muted">No data</div>');
-      }
+  function renderTable(tbl, rows) {
+    const thead = tbl.querySelector('thead');
+    const tbody = tbl.querySelector('tbody');
+    if (!rows.length) { thead.innerHTML=''; tbody.innerHTML=''; return; }
+    const headers = Object.keys(rows[0]);
+    thead.innerHTML = '<tr>' + headers.map(h=>`<th>${h}</th>`).join('') + '</tr>';
+    tbody.innerHTML = rows.map(r => '<tr>' + headers.map(h=>`<td>${r[h]}</td>`).join('') + '</tr>').join('');
+  }
+
+  function fillSymbols(list) {
+    const sel = document.getElementById('symbol');
+    const opts = ['<option value="">All</option>'];
+    for (const s of list) opts.push(`<option value="${s}">${s}</option>`);
+    sel.innerHTML = opts.join('');
+  }
+
+  async function checkFile(url, id) {
+    try {
+      const res = await fetch(url, { method:'HEAD' });
+      document.getElementById(id).style.display = res.ok ? '' : 'none';
+    } catch {
+      document.getElementById(id).style.display = 'none';
     }
+  }
 
-    async function loadOptimize() {
-      try {
-        const res = await fetch('/analytics/optimize.csv');
-        if (!res.ok) throw new Error('no');
-        const rows = parseCsv(await res.text()).slice(0,20);
-        if (!rows.length) { document.getElementById('optEmpty').textContent = 'No data'; return; }
-        renderTable(document.getElementById('optTable'), rows);
-      } catch {
-        document.getElementById('optEmpty').textContent = 'No data';
-      }
+  async function fetchBacktest() {
+    try {
+      const res = await fetch('/analytics/backtest.csv');
+      if (!res.ok) return null;
+      const rows = parseCsv(await res.text());
+      if (!rows.length) return null;
+      return rows.map(r => ({ x: Number(r.ts), y: Number(r.equity) }));
+    } catch {
+      return null;
     }
+  }
 
-    async function loadWalkforward() {
-      try {
-        const res = await fetch('/analytics/walkforward.csv');
-        if (!res.ok) throw new Error('no');
-        const rows = parseCsv(await res.text());
-        if (!rows.length) { document.getElementById('walkEmpty').textContent = 'No data'; return; }
-        renderTable(document.getElementById('walkTable'), rows);
-      } catch {
-        document.getElementById('walkEmpty').textContent = 'No data';
-      }
+  let equityChart = new Chart(document.getElementById('equityChart'), {
+    type:'line',
+    data:{ datasets:[] },
+    options:{
+      responsive:true,
+      parsing:false,
+      scales:{ x:{ type:'linear', ticks:{ maxTicksLimit:6, callback:v=>new Date(v).toLocaleDateString() } } }
     }
+  });
 
-    async function loadTrades() {
-      const from = document.getElementById('from').value;
-      const to = document.getElementById('to').value;
-      const params = new URLSearchParams();
-      if (from) params.set('from', from);
-      if (to) params.set('to', to);
-      try {
-        const res = await fetch('/analytics/data?' + params.toString());
-        const data = await res.json();
-        const eq = data.equity || [];
-        if (!eq.length) {
-          liveChart.data.labels = []; liveChart.data.datasets[0].data = []; liveChart.update();
-          document.getElementById('tradeEmpty').textContent = 'No closed trades';
-        } else {
-          liveChart.data.labels = eq.map(p => new Date(p.ts).toLocaleString());
-          liveChart.data.datasets[0].data = eq.map(p => p.equity);
-          liveChart.update();
-          document.getElementById('tradeEmpty').textContent = '';
-        }
-        const tblRows = (data.trades || []).map(t => ({
-          id: t.id,
-          time: new Date(t.closed_at).toLocaleString(),
-          symbol: t.symbol,
-          entry: t.entry_price,
-          exit: t.exit_price,
-          pnl: t.pnl
-        }));
-        renderTable(document.getElementById('tradeTable'), tblRows);
-        if (!tblRows.length) document.getElementById('tradeEmpty').textContent = 'No closed trades';
-      } catch {
-        document.getElementById('tradeEmpty').textContent = 'No closed trades';
-      }
+  let btData = null;
+
+  async function init() {
+    await Promise.all([
+      checkFile('/analytics/backtest.csv','downloadBacktest'),
+      checkFile('/analytics/optimize.csv','downloadOptimize'),
+      checkFile('/analytics/walkforward.csv','downloadWalkforward')
+    ]);
+    btData = await fetchBacktest();
+    const data = await fetch('/analytics/data').then(r=>r.json());
+    fillSymbols(data.symbols || []);
+    applyData(data);
+    updateDownloadLink(new URLSearchParams());
+  }
+
+  function updateDownloadLink(params) {
+    const q = params.toString();
+    document.getElementById('downloadTrades').href = '/analytics/trades.csv' + (q ? '?' + q : '');
+  }
+
+  async function loadData() {
+    const params = new URLSearchParams();
+    const sym = document.getElementById('symbol').value;
+    const from = document.getElementById('from').value;
+    const to = document.getElementById('to').value;
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (sym) params.set('symbol', sym);
+    const data = await fetch('/analytics/data?' + params.toString()).then(r=>r.json());
+    applyData(data);
+    updateDownloadLink(params);
+  }
+
+  function applyData(data) {
+    const eq = data.equity || [];
+    const datasets = [];
+    if (btData && btData.length) datasets.push({ label:'Backtest Equity', data:btData, tension:0.2, pointRadius:0 });
+    const liveData = eq.map(p => ({ x: p.ts, y: p.equity }));
+    datasets.push({ label:'Live Equity', data:liveData, tension:0.2, pointRadius:0 });
+    equityChart.data.datasets = datasets;
+    equityChart.update();
+
+    const tblRows = (data.trades || []).map(t => ({
+      Time: new Date(t.closed_at).toLocaleString(),
+      Symbol: t.symbol,
+      Entry: t.entry_price,
+      Exit: t.exit_price,
+      PnL: t.pnl
+    }));
+    renderTable(document.getElementById('tradeTable'), tblRows);
+    document.getElementById('tradeEmpty').textContent = tblRows.length ? '' : 'No closed trades';
+  }
+
+  async function loadOptimize() {
+    try {
+      const res = await fetch('/analytics/optimize.csv');
+      if (!res.ok) throw new Error('no');
+      const rows = parseCsv(await res.text()).slice(0,20);
+      if (!rows.length) { document.getElementById('optEmpty').textContent = 'No data'; return; }
+      renderTable(document.getElementById('optTable'), rows);
+    } catch {
+      document.getElementById('optEmpty').textContent = 'No data';
     }
+  }
 
-    document.getElementById('reload').addEventListener('click', loadTrades);
+  async function loadWalkforward() {
+    try {
+      const res = await fetch('/analytics/walkforward.csv');
+      if (!res.ok) throw new Error('no');
+      const rows = parseCsv(await res.text());
+      if (!rows.length) { document.getElementById('walkEmpty').textContent = 'No data'; return; }
+      renderTable(document.getElementById('walkTable'), rows);
+    } catch {
+      document.getElementById('walkEmpty').textContent = 'No data';
+    }
+  }
 
-    loadBacktest();
-    loadOptimize();
-    loadWalkforward();
-    loadTrades();
-  </script>
+  document.getElementById('reload').addEventListener('click', loadData);
+
+  init();
+  loadOptimize();
+  loadWalkforward();
+</script>
 </body>
 </html>
-

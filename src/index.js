@@ -186,21 +186,42 @@ app.get('/analytics', (_req, res) => {
 });
 
 app.get('/analytics/data', async (req, res) => {
-  const fromStr = req.query.from ? String(req.query.from) : null;
-  const toStr = req.query.to ? String(req.query.to) : null;
-  const from = fromStr ? Date.parse(fromStr) : null;
-  const to = toStr ? Date.parse(toStr) : null;
+  const parseDate = (s) => {
+    const t = Date.parse(String(s));
+    return Number.isNaN(t) ? null : t;
+  };
+  const from = req.query.from ? parseDate(req.query.from) : null;
+  const to = req.query.to ? parseDate(req.query.to) : null;
+  let symbol = req.query.symbol ? String(req.query.symbol).trim() : null;
+  if (!symbol) symbol = null;
+
+  res.set('Cache-Control', 'no-store');
+
+  let symbols = [];
+  try {
+    const { rows } = await db.query(
+      'SELECT DISTINCT symbol FROM paper_trades WHERE symbol IS NOT NULL ORDER BY symbol ASC'
+    );
+    symbols = rows.map(r => r.symbol);
+  } catch (e) {
+    console.error('[/analytics/data] symbols error:', e);
+  }
 
   let trades = [];
   try {
+    // Recommended DB indices for performance:
+    // CREATE INDEX IF NOT EXISTS idx_trades_closed_at ON paper_trades (closed_at);
+    // CREATE INDEX IF NOT EXISTS idx_trades_symbol ON paper_trades (symbol);
     const { rows } = await db.query(
       `SELECT id, symbol, opened_at, closed_at, entry_price, exit_price, pnl
        FROM paper_trades
        WHERE status='CLOSED'
-         AND ($1::bigint IS NULL OR closed_at >= $1::bigint)
-         AND ($2::bigint IS NULL OR closed_at <  $2::bigint)
-       ORDER BY closed_at ASC`,
-      [from, to]
+         AND ($1::bigint IS NULL OR closed_at >= $1)
+         AND ($2::bigint IS NULL OR closed_at <  $2)
+         AND ($3::text IS NULL OR symbol = $3)
+       ORDER BY closed_at ASC
+       LIMIT 5000`,
+      [from, to, symbol]
     );
     trades = rows.map(r => ({
       id: r.id,
@@ -237,7 +258,42 @@ app.get('/analytics/data', async (req, res) => {
     maxDrawdown
   };
 
-  res.json({ ok: true, summary, equity, trades });
+  res.json({ ok: true, symbols, summary, equity, trades });
+});
+
+app.get('/analytics/trades.csv', async (req, res) => {
+  const parseDate = (s) => {
+    const t = Date.parse(String(s));
+    return Number.isNaN(t) ? null : t;
+  };
+  const from = req.query.from ? parseDate(req.query.from) : null;
+  const to = req.query.to ? parseDate(req.query.to) : null;
+  let symbol = req.query.symbol ? String(req.query.symbol).trim() : null;
+  if (!symbol) symbol = null;
+
+  res.set('Cache-Control', 'no-store');
+
+  try {
+    const { rows } = await db.query(
+      `SELECT id, symbol, opened_at, closed_at, entry_price, exit_price, pnl
+       FROM paper_trades
+       WHERE status='CLOSED'
+         AND ($1::bigint IS NULL OR closed_at >= $1)
+         AND ($2::bigint IS NULL OR closed_at <  $2)
+         AND ($3::text IS NULL OR symbol = $3)
+       ORDER BY closed_at ASC
+       LIMIT 50000`,
+      [from, to, symbol]
+    );
+    const header = 'id,symbol,opened_at,closed_at,entry_price,exit_price,pnl\n';
+    const csv = header + rows.map(r => [r.id, r.symbol, r.opened_at, r.closed_at, r.entry_price, r.exit_price, r.pnl].join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="trades.csv"');
+    res.send(csv);
+  } catch (e) {
+    console.error('[/analytics/trades.csv] error:', e);
+    res.status(500).json({ ok: false, error: 'db_error' });
+  }
 });
 
 app.use('/analytics', express.static(publicDir));
