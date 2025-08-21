@@ -4,6 +4,7 @@ import fsp from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { generateSignals } from './strategy.js';
+import { sendTradeAlert } from './notify/telegram.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientPublicDir = path.join(__dirname, '..', 'client', 'public');
@@ -23,6 +24,8 @@ const CFG_DEFAULTS = {
   trailPct: 0,
   riskPct: 0.01,
   maxOpenTrades: 1,
+  muteAlerts: false,
+  symbol: 'BTCUSDT',
 };
 
 async function ensurePublicDir() {
@@ -50,6 +53,7 @@ export async function setLiveConfig(newCfg) {
   if (Number.isFinite(newCfg.maxOpenTrades) && newCfg.maxOpenTrades >= 1) {
     updated.maxOpenTrades = Math.floor(newCfg.maxOpenTrades);
   }
+  if (typeof newCfg.muteAlerts === 'boolean') updated.muteAlerts = newCfg.muteAlerts;
   await fsp.writeFile(paramsPath, JSON.stringify(updated, null, 2));
   return updated;
 }
@@ -139,17 +143,38 @@ async function openPosition(client, { ts, price, size, params }) {
      VALUES($1,'BUY',$2,$3,NULL,$2,NULL,'OPEN',$2,$4,$5,$6,$7)`,
     [Number(ts), Number(price), Number(size), Number(tpPct), Number(slPct), Number(trailPct), Number(riskPct)]
   );
+  if (!params.muteAlerts) {
+    const symbol = params.symbol || 'BTCUSDT';
+    await sendTradeAlert('OPEN', {
+      symbol,
+      side: 'LONG',
+      entryPrice: price,
+      size,
+      ts,
+    });
+  }
 }
 
-async function closePosition(client, position, { ts, price }) {
+async function closePosition(client, position, { ts, price, reason = 'SIGNAL', params }) {
   const pnl = (Number(price) - Number(position.entry_price)) * Number(position.size);
   await client.query(
     `UPDATE paper_trades SET status='CLOSED', exit_price=$1, price=$1, pnl=$2 WHERE id=$3`,
     [Number(price), Number(pnl), Number(position.id)]
   );
+  if (!params.muteAlerts) {
+    const symbol = params.symbol || 'BTCUSDT';
+    await sendTradeAlert('CLOSE', {
+      symbol,
+      side: 'LONG',
+      exitPrice: price,
+      pnl,
+      reason,
+      ts,
+    });
+  }
 }
 
-async function applyRiskAndStops(client, lastPrice, ts) {
+async function applyRiskAndStops(client, lastPrice, ts, params) {
   const opens = await getOpenPositions(client);
   for (const p of opens) {
     const entry = Number(p.entry_price);
@@ -158,20 +183,24 @@ async function applyRiskAndStops(client, lastPrice, ts) {
     let trailTop = Number(p.trail_top ?? entry);
     const trailPct = Number(p.trail_pct || 0);
     let hit = false;
+    let reason = 'SIGNAL';
     if (Number(p.tp_pct) && lastPrice >= tp) {
       hit = true;
+      reason = 'TP';
     } else if (Number(p.sl_pct) && lastPrice <= sl) {
       hit = true;
+      reason = 'SL';
     } else if (trailPct > 0) {
       if (lastPrice > trailTop) {
         trailTop = lastPrice;
         await client.query(`UPDATE paper_trades SET trail_top=$1 WHERE id=$2`, [trailTop, p.id]);
       } else if (lastPrice <= trailTop * (1 - trailPct)) {
         hit = true;
+        reason = 'TRAIL';
       }
     }
     if (hit) {
-      await closePosition(client, p, { ts, price: lastPrice });
+      await closePosition(client, p, { ts, price: lastPrice, reason, params });
     }
   }
 }
@@ -205,11 +234,11 @@ async function step() {
         await openPosition(client, { ts: nowTs, price: lastPrice, size, params });
       } else if (lastSignal.side === 'SELL' && openPositions.length > 0) {
         const pos = openPositions[0];
-        await closePosition(client, pos, { ts: nowTs, price: lastPrice });
+        await closePosition(client, pos, { ts: nowTs, price: lastPrice, reason: 'SIGNAL', params });
       }
     }
 
-    await applyRiskAndStops(client, lastPrice, nowTs);
+    await applyRiskAndStops(client, lastPrice, nowTs, params);
 
     const eq = await equityNow(client);
     const trades50 = await lastTrades(client, 50);
