@@ -19,14 +19,6 @@ jobs:
       GCP_REGION: ${{ secrets.GCP_REGION }}
 
     steps:
-      - name: Show working dir and files
-        run: |
-          pwd
-          ls -la
-          echo "Node:" && node -v
-          echo "npm:" && npm -v
-          echo "Has package-lock?"; [ -f package-lock.json ] && echo "YES" || (echo "NO" && exit 1)
-
       - name: Checkout1
         uses: actions/checkout@v4
         with:
@@ -41,6 +33,14 @@ jobs:
           find . -maxdepth 2 -type f | sed -n '1,60p'
           echo "== git status =="
           git status
+          
+      - name: Show working dir and files
+        run: |
+          pwd
+          ls -la
+          echo "Node:" && node -v
+          echo "npm:" && npm -v
+          echo "Has package-lock?"; [ -f package-lock.json ] && echo "YES" || (echo "NO" && exit 1)
     
       - name: Checkout
         uses: actions/checkout@v4
