@@ -1,200 +1,188 @@
 <!doctype html>
-<html lang="lt">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>Analytics</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; color: #111; background:#fafafa; }
+    body { font-family: system-ui, sans-serif; margin: 20px; color:#111; background:#fafafa; }
     h1 { margin-bottom: 8px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap: 16px; }
-    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fff; }
-    .muted { color: #6b7280; font-size: 12px; }
-    table { border-collapse: collapse; width: 100%; background:#fff }
-    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: right; }
-    th { text-align: right; color: #374151; font-weight: 600; }
-    td:first-child, th:first-child { text-align: left; }
-    .kpis { font-size: 28px; font-weight: 700; }
-    .section { margin-top: 24px; }
-    .controls { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
-    select { padding:6px 8px; border:1px solid #ddd; border-radius:8px; background:#fff; }
-    canvas { background:#fff; border:1px solid #eee; border-radius:12px; padding:8px; }
+    section { margin-top: 24px; }
+    table { border-collapse: collapse; width: 100%; background:#fff; }
+    th, td { border-bottom:1px solid #ddd; padding:4px 6px; text-align:right; }
+    th:first-child, td:first-child { text-align:left; }
+    .filters { display:flex; gap:8px; align-items:center; margin-bottom:16px; }
+    input, button { padding:4px 6px; }
+    canvas { background:#fff; border:1px solid #ddd; border-radius:8px; padding:4px; }
+    .muted { color:#666; font-size:12px; }
   </style>
-  <!-- Chart.js per CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 </head>
 <body>
   <h1>Analytics</h1>
-  <p class="muted">/analytics + /analytics/equity + /analytics/optimize</p>
-
-  <div class="grid">
-    <div class="card">
-      <div class="muted">Backtest PnL</div>
-      <div id="bt-pnl" class="kpis">–</div>
-      <div class="muted">WinRate: <span id="bt-win">–</span>, MaxDD: <span id="bt-dd">–</span></div>
-    </div>
-    <div class="card">
-      <div class="muted">Walkforward PnL</div>
-      <div id="wf-pnl" class="kpis">–</div>
-      <div class="muted">WinRate: <span id="wf-win">–</span>, MaxDD: <span id="wf-dd">–</span>, Folds: <span id="wf-folds">–</span></div>
-    </div>
+  <div class="filters">
+    <label>From <input type="date" id="from"></label>
+    <label>To <input type="date" id="to"></label>
+    <button id="reload">Reload</button>
   </div>
 
-  <div class="section grid">
-    <div class="card">
-      <h3 style="margin:0 0 8px 0;">Backtest Equity</h3>
-      <canvas id="chart-backtest" height="180"></canvas>
-    </div>
-    <div class="card">
-      <h3 style="margin:0 0 8px 0;">Walkforward Aggregated Equity</h3>
-      <canvas id="chart-wf" height="180"></canvas>
-    </div>
-  </div>
+  <section>
+    <h2>Backtest equity</h2>
+    <canvas id="backtestChart" height="160"></canvas>
+  </section>
 
-  <div class="section card">
-    <div class="controls">
-      <h3 style="margin:0;">Optimize – Top</h3>
-      <select id="opt-limit">
-        <option>10</option>
-        <option>25</option>
-        <option selected>50</option>
-        <option>100</option>
-      </select>
-      <span class="muted">sort by</span>
-      <select id="opt-sort">
-        <option value="score" selected>score</option>
-        <option value="pnl">pnl</option>
-        <option value="winRate">winRate</option>
-        <option value="maxDrawdown">maxDrawdown</option>
-        <option value="trades">trades</option>
-      </select>
-      <select id="opt-dir">
-        <option value="desc" selected>desc</option>
-        <option value="asc">asc</option>
-      </select>
-      <button id="opt-refresh" style="margin-left:auto; padding:6px 10px; border:1px solid #ddd; border-radius:8px; background:#fff; cursor:pointer;">Reload</button>
-    </div>
-    <div class="muted">Iš <code>optimize.csv</code></div>
+  <section>
+    <h2>Optimize top 20</h2>
     <div style="overflow:auto;">
-      <table id="opt-table">
+      <table id="optTable">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="optEmpty" class="muted"></div>
+  </section>
+
+  <section>
+    <h2>Walkforward</h2>
+    <div style="overflow:auto;">
+      <table id="walkTable">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="walkEmpty" class="muted"></div>
+  </section>
+
+  <section>
+    <h2>Live Trade History</h2>
+    <canvas id="liveChart" height="160"></canvas>
+    <div style="overflow:auto; margin-top:8px;">
+      <table id="tradeTable">
         <thead>
-          <tr>
-            <th>rsiBuy</th><th>rsiSell</th><th>atrMult</th><th>adxMin</th>
-            <th>trades</th><th>closedTrades</th><th>winRate</th><th>pnl</th><th>maxDrawdown</th><th>score</th>
-          </tr>
+          <tr><th>id</th><th>time</th><th>symbol</th><th>entry</th><th>exit</th><th>pnl</th></tr>
         </thead>
         <tbody></tbody>
       </table>
     </div>
-  </div>
+    <div id="tradeEmpty" class="muted"></div>
+  </section>
 
   <script>
-    let chartsReady = false;
-    let chartBT = null, chartWF = null;
-
-    function num(v) { return Number.isFinite(+v) ? (+v).toFixed(2) : '0.00'; }
-    function pct(v) { return Number.isFinite(+v) ? (+v).toFixed(2) + '%' : '0.00%'; }
-
-    async function loadAnalytics() {
-      const r = await fetch('/analytics');
-      return r.json();
-    }
-    async function loadEquity() {
-      const r = await fetch('/analytics/equity');
-      return r.json();
-    }
-    async function loadOptimize(limit=50, sort='score', dir='desc') {
-      const r = await fetch(`/analytics/optimize?limit=${encodeURIComponent(limit)}&sort=${encodeURIComponent(sort)}&dir=${encodeURIComponent(dir)}`);
-      return r.json();
-    }
-
-    function renderKPI(data) {
-      const bt = data.backtest || {};
-      const wf = data.walkforward || {};
-      document.getElementById('bt-pnl').textContent = num(bt.pnl);
-      document.getElementById('bt-win').textContent = pct(bt.winRate);
-      document.getElementById('bt-dd').textContent  = num(bt.maxDrawdown);
-      document.getElementById('wf-pnl').textContent = num(wf.pnl);
-      document.getElementById('wf-win').textContent = pct(wf.winRate);
-      document.getElementById('wf-dd').textContent  = num(wf.maxDrawdown);
-      document.getElementById('wf-folds').textContent = wf.folds ?? '–';
-    }
-
-    function ensureCharts() {
-      if (chartsReady) return;
-      const ctxBT = document.getElementById('chart-backtest').getContext('2d');
-      const ctxWF = document.getElementById('chart-wf').getContext('2d');
-      chartBT = new Chart(ctxBT, {
-        type: 'line',
-        data: { labels: [], datasets: [{ label: 'Equity', data: [], tension: 0.2, pointRadius: 0 }] },
-        options: { responsive: true, scales: { x: { ticks: { maxTicksLimit: 6 } }, y: { beginAtZero: false } } }
+    function parseCsv(text) {
+      const lines = text.trim().split(/\r?\n/);
+      if (!lines.length) return [];
+      const headers = lines[0].split(',');
+      return lines.slice(1).map(line => {
+        const parts = line.split(',');
+        const obj = {};
+        headers.forEach((h, i) => {
+          const v = parts[i];
+          const n = Number(v);
+          obj[h] = Number.isFinite(n) ? n : v;
+        });
+        return obj;
       });
-      chartWF = new Chart(ctxWF, {
-        type: 'line',
-        data: { labels: [], datasets: [{ label: 'Aggregated Equity', data: [], tension: 0.2, pointRadius: 0 }] },
-        options: { responsive: true, scales: { x: { ticks: { maxTicksLimit: 6 } }, y: { beginAtZero: false } } }
-      });
-      chartsReady = true;
     }
 
-    function renderBacktestChart(points) {
-      if (!chartBT) return;
-      const labels = points.map(p => new Date(p.ts).toLocaleDateString());
-      const data   = points.map(p => +p.equity || 0);
-      chartBT.data.labels = labels;
-      chartBT.data.datasets[0].data = data;
-      chartBT.update();
-    }
-    function renderWFChart(points) {
-      if (!chartWF) return;
-      const labels = points.map(p => p.idx);
-      const data   = points.map(p => +p.equity || 0);
-      chartWF.data.labels = labels;
-      chartWF.data.datasets[0].data = data;
-      chartWF.update();
+    function renderTable(tbl, rows) {
+      const thead = tbl.querySelector('thead');
+      const tbody = tbl.querySelector('tbody');
+      if (!rows.length) { thead.innerHTML=''; tbody.innerHTML=''; return; }
+      const headers = Object.keys(rows[0]);
+      thead.innerHTML = '<tr>' + headers.map(h=>`<th>${h}</th>`).join('') + '</tr>';
+      tbody.innerHTML = rows.map(r => '<tr>' + headers.map(h=>`<td>${r[h]}</td>`).join('') + '</tr>').join('');
     }
 
-    async function renderOptimize(limit=50, sort='score', dir='desc') {
-      const rows = await loadOptimize(limit, sort, dir);
-      const tbody = document.querySelector('#opt-table tbody');
-      tbody.innerHTML = '';
-      for (const r of rows) {
-        const tr = document.createElement('tr');
-        tr.innerHTML = [
-          r.rsiBuy, r.rsiSell, r.atrMult, r.adxMin,
-          r.trades, r.closedTrades,
-          num(r.winRate), num(r.pnl), num(r.maxDrawdown), (+r.score || 0).toFixed(4)
-        ].map(c => `<td>${c ?? 0}</td>`).join('');
-        tbody.appendChild(tr);
+    let btChart = new Chart(document.getElementById('backtestChart'), {
+      type:'line', data:{labels:[], datasets:[{label:'Equity', data:[], tension:0.2, pointRadius:0}]},
+      options:{responsive:true, scales:{x:{ticks:{maxTicksLimit:6}}}}
+    });
+    let liveChart = new Chart(document.getElementById('liveChart'), {
+      type:'line', data:{labels:[], datasets:[{label:'Equity', data:[], tension:0.2, pointRadius:0}]},
+      options:{responsive:true, scales:{x:{ticks:{maxTicksLimit:6}}}}
+    });
+
+    async function loadBacktest() {
+      try {
+        const res = await fetch('/analytics/backtest.csv');
+        if (!res.ok) throw new Error('no');
+        const rows = parseCsv(await res.text());
+        if (!rows.length) return;
+        const labels = rows.map(r => new Date(r.ts).toLocaleString());
+        const data = rows.map(r => r.equity);
+        btChart.data.labels = labels;
+        btChart.data.datasets[0].data = data;
+        btChart.update();
+      } catch {
+        document.getElementById('backtestChart').insertAdjacentHTML('afterend', '<div class="muted">No data</div>');
       }
     }
 
-    async function init() {
-      ensureCharts();
-
-      const analytics = await loadAnalytics();
-      renderKPI(analytics);
-
-      const equity = await loadEquity();
-      renderBacktestChart(Array.isArray(equity.backtest) ? equity.backtest : []);
-      renderWFChart(Array.isArray(equity.walkforward) ? equity.walkforward : []);
-
-      const limitSel = document.getElementById('opt-limit');
-      const sortSel  = document.getElementById('opt-sort');
-      const dirSel   = document.getElementById('opt-dir');
-      const btn      = document.getElementById('opt-refresh');
-
-      const reload = () => renderOptimize(parseInt(limitSel.value,10), sortSel.value, dirSel.value);
-      btn.addEventListener('click', reload);
-
-      // initial load
-      reload();
+    async function loadOptimize() {
+      try {
+        const res = await fetch('/analytics/optimize.csv');
+        if (!res.ok) throw new Error('no');
+        const rows = parseCsv(await res.text()).slice(0,20);
+        if (!rows.length) { document.getElementById('optEmpty').textContent = 'No data'; return; }
+        renderTable(document.getElementById('optTable'), rows);
+      } catch {
+        document.getElementById('optEmpty').textContent = 'No data';
+      }
     }
 
-    window.addEventListener('load', () => {
-      if (window.Chart) init();
-      else console.error('Chart.js failed to load');
-    });
+    async function loadWalkforward() {
+      try {
+        const res = await fetch('/analytics/walkforward.csv');
+        if (!res.ok) throw new Error('no');
+        const rows = parseCsv(await res.text());
+        if (!rows.length) { document.getElementById('walkEmpty').textContent = 'No data'; return; }
+        renderTable(document.getElementById('walkTable'), rows);
+      } catch {
+        document.getElementById('walkEmpty').textContent = 'No data';
+      }
+    }
+
+    async function loadTrades() {
+      const from = document.getElementById('from').value;
+      const to = document.getElementById('to').value;
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      try {
+        const res = await fetch('/analytics/data?' + params.toString());
+        const data = await res.json();
+        const eq = data.equity || [];
+        if (!eq.length) {
+          liveChart.data.labels = []; liveChart.data.datasets[0].data = []; liveChart.update();
+          document.getElementById('tradeEmpty').textContent = 'No closed trades';
+        } else {
+          liveChart.data.labels = eq.map(p => new Date(p.ts).toLocaleString());
+          liveChart.data.datasets[0].data = eq.map(p => p.equity);
+          liveChart.update();
+          document.getElementById('tradeEmpty').textContent = '';
+        }
+        const tblRows = (data.trades || []).map(t => ({
+          id: t.id,
+          time: new Date(t.closed_at).toLocaleString(),
+          symbol: t.symbol,
+          entry: t.entry_price,
+          exit: t.exit_price,
+          pnl: t.pnl
+        }));
+        renderTable(document.getElementById('tradeTable'), tblRows);
+        if (!tblRows.length) document.getElementById('tradeEmpty').textContent = 'No closed trades';
+      } catch {
+        document.getElementById('tradeEmpty').textContent = 'No closed trades';
+      }
+    }
+
+    document.getElementById('reload').addEventListener('click', loadTrades);
+
+    loadBacktest();
+    loadOptimize();
+    loadWalkforward();
+    loadTrades();
   </script>
 </body>
 </html>
+
