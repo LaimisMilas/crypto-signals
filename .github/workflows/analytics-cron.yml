@@ -19,7 +19,7 @@ jobs:
       GCP_REGION: ${{ secrets.GCP_REGION }}
 
     steps:
-      - name: Checkout12
+      - name: Checkout122
         uses: actions/checkout@v4
         with:
           fetch-depth: 0      # nebūtina, bet naudinga versijavimui
