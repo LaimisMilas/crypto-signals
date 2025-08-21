@@ -14,6 +14,8 @@ import { ingestOnce, getIngestHealth } from './ingest.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'client', 'public');
 const app = express();
+// Alias db pool for clarity
+const pool = db;
 
 app.use(cors());
 app.use(cookieParser());
@@ -186,113 +188,123 @@ app.get('/analytics', (_req, res) => {
 });
 
 app.get('/analytics/data', async (req, res) => {
-  const parseDate = (s) => {
-    const t = Date.parse(String(s));
-    return Number.isNaN(t) ? null : t;
-  };
-  const from = req.query.from ? parseDate(req.query.from) : null;
-  const to = req.query.to ? parseDate(req.query.to) : null;
-  let symbol = req.query.symbol ? String(req.query.symbol).trim() : null;
-  if (!symbol) symbol = null;
-
-  res.set('Cache-Control', 'no-store');
-
-  let symbols = [];
   try {
-    const { rows } = await db.query(
-      'SELECT DISTINCT symbol FROM paper_trades WHERE symbol IS NOT NULL ORDER BY symbol ASC'
-    );
-    symbols = rows.map(r => r.symbol);
-  } catch (e) {
-    console.error('[/analytics/data] symbols error:', e);
-  }
+    const fromIso = req.query.from;
+    const toIso = req.query.to;
+    const symbolParam = req.query.symbol; // nepanaudosim DB filtre, nes simbolio nėra lentelėje
 
-  let trades = [];
-  try {
-    // Recommended DB indices for performance:
-    // CREATE INDEX IF NOT EXISTS idx_trades_closed_at ON paper_trades (closed_at);
-    // CREATE INDEX IF NOT EXISTS idx_trades_symbol ON paper_trades (symbol);
-    const { rows } = await db.query(
-      `SELECT id, symbol, opened_at, closed_at, entry_price, exit_price, pnl
-       FROM paper_trades
-       WHERE status='CLOSED'
-         AND ($1::bigint IS NULL OR closed_at >= $1)
-         AND ($2::bigint IS NULL OR closed_at <  $2)
-         AND ($3::text IS NULL OR symbol = $3)
-       ORDER BY closed_at ASC
-       LIMIT 5000`,
-      [from, to, symbol]
-    );
-    trades = rows.map(r => ({
-      id: r.id,
-      symbol: r.symbol,
-      opened_at: Number(r.opened_at),
-      closed_at: Number(r.closed_at),
-      entry_price: Number(r.entry_price),
-      exit_price: Number(r.exit_price),
-      pnl: Number(r.pnl)
-    }));
+    const fromMs = Number.isFinite(Date.parse(fromIso)) ? Date.parse(fromIso) : null;
+    const toMs   = Number.isFinite(Date.parse(toIso))   ? Date.parse(toIso)   : null;
+
+    const client = await pool.connect();
+    try {
+      // Užklausai naudosim ts kaip "closed_at" pakaitalą (tik CLOSED įrašai)
+      const q = `
+        SELECT id, ts, entry_price, exit_price, pnl, status
+        FROM paper_trades
+        WHERE status='CLOSED'
+          AND ($1::bigint IS NULL OR ts >= $1::bigint)
+          AND ($2::bigint IS NULL OR ts <  $2::bigint)
+        ORDER BY ts ASC
+        LIMIT 5000
+      `;
+      const { rows } = await client.query(q, [fromMs, toMs]);
+
+      // symbols – kad UI neužlūžtų, grąžinam bent 1 reikšmę iš ENV arba default
+      const defaultSymbol = process.env.SYMBOL || 'BTCUSDT';
+      const symbols = [defaultSymbol];
+
+      // suformuojam trades masyvą su "closed_at" = ts, "symbol" = defaultSymbol (arba iš query)
+      const trades = rows.map(r => ({
+        id: r.id,
+        symbol: symbolParam || defaultSymbol,
+        opened_at: null,             // neturim atidarymo timestamp – paliekam null
+        closed_at: Number(r.ts),     // ts naudojam kaip uždarymo timestamp
+        entry_price: Number(r.entry_price ?? 0),
+        exit_price: Number(r.exit_price ?? 0),
+        pnl: Number(r.pnl ?? 0),
+      }));
+
+      // EQ kreivė pagal closed_at (ts)
+      let eq = 0, peak = -Infinity, maxDD = 0, wins = 0;
+      const equity = trades.map(t => {
+        eq += (t.pnl || 0);
+        if (eq > peak) peak = eq;
+        const dd = peak - eq;
+        if (dd > maxDD) maxDD = dd;
+        if ((t.pnl || 0) > 0) wins++;
+        return { ts: t.closed_at, equity: eq };
+      });
+
+      const summary = {
+        trades: trades.length,
+        pnl: Number(eq.toFixed(2)),
+        winRate: trades.length ? Number((wins / trades.length * 100).toFixed(2)) : 0,
+        maxDrawdown: Number(maxDD.toFixed(2)),
+      };
+
+      res.set('Cache-Control', 'no-store');
+      res.json({ ok: true, symbols, summary, equity, trades });
+    } finally {
+      client.release();
+    }
   } catch (e) {
     console.error('[/analytics/data] error:', e);
-    return res.status(500).json({ ok: false, error: 'db_error' });
+    res.status(500).json({ ok: false, error: 'internal_error' });
   }
-
-  let equity = [];
-  let sum = 0;
-  let peak = 0;
-  let maxDrawdown = 0;
-  let wins = 0;
-  for (const t of trades) {
-    sum += t.pnl || 0;
-    equity.push({ ts: t.closed_at, equity: sum });
-    if (sum > peak) peak = sum;
-    const dd = peak - sum;
-    if (dd > maxDrawdown) maxDrawdown = dd;
-    if (t.pnl > 0) wins++;
-  }
-
-  const summary = {
-    trades: trades.length,
-    pnl: sum,
-    winRate: trades.length ? (wins / trades.length) * 100 : 0,
-    maxDrawdown
-  };
-
-  res.json({ ok: true, symbols, summary, equity, trades });
 });
 
 app.get('/analytics/trades.csv', async (req, res) => {
-  const parseDate = (s) => {
-    const t = Date.parse(String(s));
-    return Number.isNaN(t) ? null : t;
-  };
-  const from = req.query.from ? parseDate(req.query.from) : null;
-  const to = req.query.to ? parseDate(req.query.to) : null;
-  let symbol = req.query.symbol ? String(req.query.symbol).trim() : null;
-  if (!symbol) symbol = null;
-
-  res.set('Cache-Control', 'no-store');
-
   try {
-    const { rows } = await db.query(
-      `SELECT id, symbol, opened_at, closed_at, entry_price, exit_price, pnl
-       FROM paper_trades
-       WHERE status='CLOSED'
-         AND ($1::bigint IS NULL OR closed_at >= $1)
-         AND ($2::bigint IS NULL OR closed_at <  $2)
-         AND ($3::text IS NULL OR symbol = $3)
-       ORDER BY closed_at ASC
-       LIMIT 50000`,
-      [from, to, symbol]
-    );
-    const header = 'id,symbol,opened_at,closed_at,entry_price,exit_price,pnl\n';
-    const csv = header + rows.map(r => [r.id, r.symbol, r.opened_at, r.closed_at, r.entry_price, r.exit_price, r.pnl].join(',')).join('\n');
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="trades.csv"');
-    res.send(csv);
+    const fromIso = req.query.from;
+    const toIso = req.query.to;
+    const symbolParam = req.query.symbol;
+
+    const fromMs = Number.isFinite(Date.parse(fromIso)) ? Date.parse(fromIso) : null;
+    const toMs   = Number.isFinite(Date.parse(toIso))   ? Date.parse(toIso)   : null;
+
+    const defaultSymbol = process.env.SYMBOL || 'BTCUSDT';
+
+    const client = await pool.connect();
+    try {
+      const q = `
+        SELECT id, ts, entry_price, exit_price, pnl, status
+        FROM paper_trades
+        WHERE status='CLOSED'
+          AND ($1::bigint IS NULL OR ts >= $1::bigint)
+          AND ($2::bigint IS NULL OR ts <  $2::bigint)
+        ORDER BY ts ASC
+        LIMIT 50000
+      `;
+      const { rows } = await client.query(q, [fromMs, toMs]);
+
+      const header = 'id,symbol,opened_at,closed_at,entry_price,exit_price,pnl';
+      const lines = rows.map(r => {
+        const sym = symbolParam || defaultSymbol;
+        const openedAt = '';           // neturim – tuščia
+        const closedAt = r.ts;         // ts naudojam kaip uždarymo laiką
+        return [
+          r.id,
+          sym,
+          openedAt,
+          closedAt,
+          Number(r.entry_price ?? 0),
+          Number(r.exit_price ?? 0),
+          Number(r.pnl ?? 0),
+        ].join(',');
+      });
+
+      const csv = [header, ...lines].join('\\n');
+      res.set('Cache-Control', 'no-store');
+      res.set('Content-Type', 'text/csv; charset=utf-8');
+      res.set('Content-Disposition', 'attachment; filename="trades.csv"');
+      res.send(csv);
+    } finally {
+      client.release();
+    }
   } catch (e) {
     console.error('[/analytics/trades.csv] error:', e);
-    res.status(500).json({ ok: false, error: 'db_error' });
+    res.status(500).send('internal_error');
   }
 });
 
