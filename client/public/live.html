@@ -13,6 +13,7 @@
     <label>Trail %: <input step="0.0001" type="number" id="trailPct"></label>
     <label>Risk %: <input step="0.0001" type="number" id="riskPct"></label>
     <label>Max open: <input step="1" type="number" id="maxOpenTrades"></label>
+    <label><input type="checkbox" id="muteAlerts"> Mute Telegram alerts</label>
     <button type="submit">Save</button>
   </form>
   <button onclick="fetch('/live/start',{method:'POST'})">Start</button>
@@ -33,6 +34,7 @@ async function loadCfg() {
   const c = await fetch('/live/config').then(r=>r.json());
   tpPct.value = c.tpPct; slPct.value = c.slPct; trailPct.value = c.trailPct;
   riskPct.value = c.riskPct; maxOpenTrades.value = c.maxOpenTrades;
+  muteAlerts.checked = !!c.muteAlerts;
 }
 document.getElementById('cfg').addEventListener('submit', async (e)=>{
   e.preventDefault();
@@ -41,7 +43,8 @@ document.getElementById('cfg').addEventListener('submit', async (e)=>{
     slPct: Number(slPct.value),
     trailPct: Number(trailPct.value),
     riskPct: Number(riskPct.value),
-    maxOpenTrades: Number(maxOpenTrades.value)
+    maxOpenTrades: Number(maxOpenTrades.value),
+    muteAlerts: !!muteAlerts.checked
   };
   await fetch('/live/config',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
   alert('Saved!');

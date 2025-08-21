@@ -8,5 +8,6 @@
   "useTrendFilter": true,
   "feePct": 0.0005,
   "slippagePct": 0.0005,
-  "positionSize": 1
+  "positionSize": 1,
+  "muteAlerts": false
 }
