@@ -178,154 +178,69 @@ app.post('/live/config', express.json(), async (req, res) => {
   res.json(saved);
 });
 
-// --- /analytics route ---
+// --- Analytics dashboard ---
 
-// small CSV -> array of objects (numbers if possible)
-function parseCsv(text) {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length === 0) return [];
-  const headers = lines[0].split(',').map(h => h.trim());
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const parts = lines[i].split(',').map(x => x.trim());
-    if (parts.length !== headers.length) continue;
-    const obj = {};
-    headers.forEach((h, idx) => {
-      const v = parts[idx];
-      const n = Number(v);
-      obj[h] = Number.isFinite(n) ? n : v; // convert numerics
-    });
-    rows.push(obj);
-  }
-  return rows;
-}
-
-async function safeReadJson(file) {
-  try {
-    const data = await fs.readFile(path.join(publicDir, file), 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return null;
-  }
-}
-
-async function safeReadCsv(file, limit = null) {
-  try {
-    const data = await fs.readFile(path.join(publicDir, file), 'utf-8');
-    const rows = parseCsv(data);
-    return Array.isArray(limit) ? rows.slice(0, limit) : (typeof limit === 'number' ? rows.slice(0, limit) : rows);
-  } catch {
-    return [];
-  }
-}
-
-app.get('/analytics', async (_req, res) => {
-  try {
-    const backtest = await safeReadJson('metrics.json'); // may be null
-    const optimize = await safeReadCsv('optimize.csv', 50); // array
-    const walkforward = await safeReadJson('walkforward-summary.json'); // may be null
-
-    res.json({
-      backtest: backtest ?? {},
-      optimize: optimize ?? [],
-      walkforward: walkforward ?? {},
-    });
-  } catch (e) {
-    console.error('[/analytics] error:', e);
-    res.status(500).json({ error: 'analytics_failed' });
-  }
+// Serve static analytics assets (CSV/HTML) from client/public
+app.get('/analytics', (_req, res) => {
+  res.sendFile(path.join(publicDir, 'analytics.html'));
 });
 
-// --- EXTRA analytics endpoints (place after existing /analytics route) ---
+app.get('/analytics/data', async (req, res) => {
+  const fromStr = req.query.from ? String(req.query.from) : null;
+  const toStr = req.query.to ? String(req.query.to) : null;
+  const from = fromStr ? Date.parse(fromStr) : null;
+  const to = toStr ? Date.parse(toStr) : null;
 
-function parseCsvRows(text) {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length === 0) return { headers: [], rows: [] };
-  const headers = lines[0].split(',').map(h => h.trim());
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const parts = lines[i].split(',').map(x => x.trim());
-    if (parts.length !== headers.length) continue;
-    const obj = {};
-    headers.forEach((h, idx) => {
-      const v = parts[idx];
-      const n = Number(v);
-      obj[h] = Number.isFinite(n) ? n : v;
-    });
-    rows.push(obj);
-  }
-  return { headers, rows };
-}
-
-app.get('/analytics/equity', async (_req, res) => {
+  let trades = [];
   try {
-    let backtest = [];
-    let walkforward = [];
-
-    // backtest.csv (ts,equity)
-    try {
-      const bt = await fs.readFile(path.join(publicDir, 'backtest.csv'), 'utf-8');
-      const { rows } = parseCsvRows(bt);
-      // normalize types/fields
-      backtest = rows
-        .filter(r => Number.isFinite(r.ts) && Number.isFinite(r.equity))
-        .map(r => ({ ts: Number(r.ts), equity: Number(r.equity) }));
-    } catch {}
-
-    // walkforward-agg.csv (idx,equity)
-    try {
-      const wf = await fs.readFile(path.join(publicDir, 'walkforward-agg.csv'), 'utf-8');
-      const { rows } = parseCsvRows(wf);
-      walkforward = rows
-        .filter(r => Number.isFinite(r.idx) && Number.isFinite(r.equity))
-        .map(r => ({ idx: Number(r.idx), equity: Number(r.equity) }));
-    } catch {}
-
-    res.json({ backtest, walkforward });
+    const { rows } = await db.query(
+      `SELECT id, symbol, opened_at, closed_at, entry_price, exit_price, pnl
+       FROM paper_trades
+       WHERE status='CLOSED'
+         AND ($1::bigint IS NULL OR closed_at >= $1::bigint)
+         AND ($2::bigint IS NULL OR closed_at <  $2::bigint)
+       ORDER BY closed_at ASC`,
+      [from, to]
+    );
+    trades = rows.map(r => ({
+      id: r.id,
+      symbol: r.symbol,
+      opened_at: Number(r.opened_at),
+      closed_at: Number(r.closed_at),
+      entry_price: Number(r.entry_price),
+      exit_price: Number(r.exit_price),
+      pnl: Number(r.pnl)
+    }));
   } catch (e) {
-    console.error('[/analytics/equity] error:', e);
-    res.json({ backtest: [], walkforward: [] });
+    console.error('[/analytics/data] error:', e);
+    return res.status(500).json({ ok: false, error: 'db_error' });
   }
+
+  let equity = [];
+  let sum = 0;
+  let peak = 0;
+  let maxDrawdown = 0;
+  let wins = 0;
+  for (const t of trades) {
+    sum += t.pnl || 0;
+    equity.push({ ts: t.closed_at, equity: sum });
+    if (sum > peak) peak = sum;
+    const dd = peak - sum;
+    if (dd > maxDrawdown) maxDrawdown = dd;
+    if (t.pnl > 0) wins++;
+  }
+
+  const summary = {
+    trades: trades.length,
+    pnl: sum,
+    winRate: trades.length ? (wins / trades.length) * 100 : 0,
+    maxDrawdown
+  };
+
+  res.json({ ok: true, summary, equity, trades });
 });
 
-app.get('/analytics/optimize', async (req, res) => {
-  try {
-    const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10), 1), 500);
-    const sort = String(req.query.sort || 'score');
-    const dir  = (String(req.query.dir || 'desc').toLowerCase() === 'asc') ? 'asc' : 'desc';
-
-    const allowed = new Set(['rsiBuy','rsiSell','atrMult','adxMin','trades','closedTrades','winRate','pnl','maxDrawdown','score']);
-
-    let rows = [];
-    try {
-      const csv = await fs.readFile(path.join(publicDir, 'optimize.csv'), 'utf-8');
-      const parsed = parseCsvRows(csv).rows;
-      rows = parsed.map(r => {
-        const out = {};
-        for (const k of Object.keys(r)) {
-          const n = Number(r[k]);
-          out[k] = Number.isFinite(n) ? n : r[k];
-        }
-        return out;
-      });
-    } catch {
-      // no file
-    }
-
-    if (rows.length && allowed.has(sort)) {
-      rows.sort((a, b) => {
-        const av = a[sort] ?? 0;
-        const bv = b[sort] ?? 0;
-        return dir === 'asc' ? (av - bv) : (bv - av);
-      });
-    }
-
-    res.json(rows.slice(0, limit));
-  } catch (e) {
-    console.error('[/analytics/optimize] error:', e);
-    res.json([]);
-  }
-});
+app.use('/analytics', express.static(publicDir));
 
 // Static files
 app.use(express.static(path.join(__dirname, '..', 'public')));
