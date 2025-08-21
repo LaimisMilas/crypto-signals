@@ -19,6 +19,14 @@ jobs:
       GCP_REGION: ${{ secrets.GCP_REGION }}
 
     steps:
+      - name: Show working dir and files
+        run: |
+          pwd
+          ls -la
+          echo "Node:" && node -v
+          echo "npm:" && npm -v
+          echo "Has package-lock?"; [ -f package-lock.json ] && echo "YES" || (echo "NO" && exit 1)
+    
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -26,7 +34,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20',
-          cache-dependency-path: ../../package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install deps (root + client)
         run: |
