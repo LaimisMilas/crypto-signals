@@ -188,70 +188,76 @@ app.get('/analytics', (_req, res) => {
 });
 
 app.get('/analytics/data', async (req, res) => {
+  const parseDateMs = (v) => {
+    if (!v) return null;
+    const t = Date.parse(String(v));
+    return Number.isNaN(t) ? null : t;
+    // from/to naudosim kaip ms -> Postgres BIGINT
+  };
+
+  const fromMs = parseDateMs(req.query.from);
+  const toMs   = parseDateMs(req.query.to);
+
+  // Schema neturi symbol; UI’ui grąžinam bent vieną reikšmę
+  const defaultSymbol = process.env.SYMBOL || 'BTCUSDT';
+  const uiSymbol = (req.query.symbol || '').toString().trim() || defaultSymbol;
+
+  res.set('Cache-Control', 'no-store');
+
+  // symbols drop-down’ui
+  const symbols = [defaultSymbol];
+
+  // Pasiimam tik CLOSED įrašus, ts naudojam kaip "closed_at"
+  let trades = [];
   try {
-    const fromIso = req.query.from;
-    const toIso = req.query.to;
-    const symbolParam = req.query.symbol; // nepanaudosim DB filtre, nes simbolio nėra lentelėje
-
-    const fromMs = Number.isFinite(Date.parse(fromIso)) ? Date.parse(fromIso) : null;
-    const toMs   = Number.isFinite(Date.parse(toIso))   ? Date.parse(toIso)   : null;
-
-    const client = await pool.connect();
-    try {
-      // Užklausai naudosim ts kaip "closed_at" pakaitalą (tik CLOSED įrašai)
-      const q = `
-        SELECT id, ts, entry_price, exit_price, pnl, status
-        FROM paper_trades
-        WHERE status='CLOSED'
-          AND ($1::bigint IS NULL OR ts >= $1::bigint)
-          AND ($2::bigint IS NULL OR ts <  $2::bigint)
-        ORDER BY ts ASC
-        LIMIT 5000
-      `;
-      const { rows } = await client.query(q, [fromMs, toMs]);
-
-      // symbols – kad UI neužlūžtų, grąžinam bent 1 reikšmę iš ENV arba default
-      const defaultSymbol = process.env.SYMBOL || 'BTCUSDT';
-      const symbols = [defaultSymbol];
-
-      // suformuojam trades masyvą su "closed_at" = ts, "symbol" = defaultSymbol (arba iš query)
-      const trades = rows.map(r => ({
-        id: r.id,
-        symbol: symbolParam || defaultSymbol,
-        opened_at: null,             // neturim atidarymo timestamp – paliekam null
-        closed_at: Number(r.ts),     // ts naudojam kaip uždarymo timestamp
-        entry_price: Number(r.entry_price ?? 0),
-        exit_price: Number(r.exit_price ?? 0),
-        pnl: Number(r.pnl ?? 0),
-      }));
-
-      // EQ kreivė pagal closed_at (ts)
-      let eq = 0, peak = -Infinity, maxDD = 0, wins = 0;
-      const equity = trades.map(t => {
-        eq += (t.pnl || 0);
-        if (eq > peak) peak = eq;
-        const dd = peak - eq;
-        if (dd > maxDD) maxDD = dd;
-        if ((t.pnl || 0) > 0) wins++;
-        return { ts: t.closed_at, equity: eq };
-      });
-
-      const summary = {
-        trades: trades.length,
-        pnl: Number(eq.toFixed(2)),
-        winRate: trades.length ? Number((wins / trades.length * 100).toFixed(2)) : 0,
-        maxDrawdown: Number(maxDD.toFixed(2)),
-      };
-
-      res.set('Cache-Control', 'no-store');
-      res.json({ ok: true, symbols, summary, equity, trades });
-    } finally {
-      client.release();
-    }
+    const q = `
+      SELECT id, ts, entry_price, exit_price, pnl
+      FROM paper_trades
+      WHERE status = 'CLOSED'
+        AND ($1::bigint IS NULL OR ts >= $1::bigint)
+        AND ($2::bigint IS NULL OR ts <  $2::bigint)
+      ORDER BY ts ASC
+      LIMIT 5000
+    `;
+    const { rows } = await db.query(q, [fromMs, toMs]);
+    trades = rows.map(r => ({
+      id: r.id,
+      symbol: uiSymbol,                 // dekoratyvinis, kol lentelėje nėra symbol
+      opened_at: null,                  // neturime atidarymo timestamp
+      closed_at: Number(r.ts),          // ts = uždarymo momentas
+      entry_price: Number(r.entry_price ?? 0),
+      exit_price: Number(r.exit_price ?? 0),
+      pnl: Number(r.pnl ?? 0),
+    }));
   } catch (e) {
-    console.error('[/analytics/data] error:', e);
-    res.status(500).json({ ok: false, error: 'internal_error' });
+    console.error('[/analytics/data] db error:', e);
+    return res.status(500).json({ ok: false, error: 'db_error' });
   }
+
+  // Equity + statistika
+  let equity = [];
+  let eq = 0;
+  let peak = -Infinity;
+  let maxDD = 0;
+  let wins = 0;
+
+  for (const t of trades) {
+    eq += t.pnl || 0;
+    if (eq > peak) peak = eq;
+    const dd = peak - eq;
+    if (dd > maxDD) maxDD = dd;
+    if ((t.pnl || 0) > 0) wins++;
+    equity.push({ ts: t.closed_at, equity: eq });
+  }
+
+  const summary = {
+    trades: trades.length,
+    pnl: Number(eq.toFixed(2)),
+    winRate: trades.length ? Number((wins / trades.length * 100).toFixed(2)) : 0,
+    maxDrawdown: Number(maxDD.toFixed(2)),
+  };
+
+  return res.json({ ok: true, symbols, summary, equity, trades });
 });
 
 app.get('/analytics/trades.csv', async (req, res) => {
