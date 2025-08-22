@@ -17,31 +17,52 @@
     a.btn { border:1px solid #ccc; border-radius:4px; background:#fff; text-decoration:none; color:#111; }
     canvas { background:#fff; border:1px solid #ddd; border-radius:8px; padding:4px; }
     .muted { color:#666; font-size:12px; }
+    #stats { display:flex; flex-wrap:wrap; gap:12px; background:#fff; padding:8px; border:1px solid #ddd; border-radius:8px; }
+    #stats div { min-width:120px; }
   </style>
 </head>
 <body>
   <h1>Analytics</h1>
   <div class="filters">
-    <label>Symbol <select id="symbol"></select></label>
-    <label>From <input type="date" id="from"></label>
-    <label>To <input type="date" id="to"></label>
-    <button id="reload">Reload</button>
-    <a id="downloadTrades" class="btn" href="/analytics/trades.csv" download>Download Trades CSV</a>
-    <a id="downloadBacktest" class="btn" href="/analytics/backtest.csv" download style="display:none;">Download Backtest CSV</a>
-    <a id="downloadOptimize" class="btn" href="/analytics/optimize.csv" download style="display:none;">Download Optimize CSV</a>
-    <a id="downloadWalkforward" class="btn" href="/analytics/walkforward.csv" download style="display:none;">Download Walkforward CSV</a>
+    <label>Symbol <input type="text" id="symbol" /></label>
+    <label>Strategy <input type="text" id="strategy" /></label>
+    <label>From <input type="date" id="from" /></label>
+    <label>To <input type="date" id="to" /></label>
+    <label>Params <input type="text" id="params" placeholder="k=v,k2=v2 or JSON" /></label>
+    <button id="apply">Apply</button>
+    <span id="status" class="muted"></span>
+    <a id="downloadTrades" class="btn" href="#" download>Trades CSV</a>
+    <a id="downloadBacktest" class="btn" href="#" download>Backtest CSV</a>
+    <a id="downloadOptimize" class="btn" href="#" download>Optimize CSV</a>
+    <a id="downloadWalkforward" class="btn" href="#" download>Walkforward CSV</a>
   </div>
 
   <section>
     <h2>Equity</h2>
     <canvas id="equityChart" height="160"></canvas>
+    <div id="equityEmpty" class="muted"></div>
+  </section>
+
+  <section>
+    <h2>Stats</h2>
+    <div id="stats">
+      <div>Total Trades: <span id="stat-totalTrades"></span></div>
+      <div>Win Rate: <span id="stat-winRate"></span></div>
+      <div>Avg PnL: <span id="stat-avgPnL"></span></div>
+      <div>Avg PnL %: <span id="stat-avgPnLPct"></span></div>
+      <div>Profit Factor: <span id="stat-profitFactor"></span></div>
+      <div>Max Drawdown: <span id="stat-maxDrawdown"></span></div>
+      <div>Sharpe: <span id="stat-sharpe"></span></div>
+      <div>Sortino: <span id="stat-sortino"></span></div>
+      <div>CAGR: <span id="stat-cagr"></span></div>
+    </div>
   </section>
 
   <section>
     <h2>Closed Trades</h2>
     <div style="overflow:auto; margin-top:8px;">
       <table id="tradeTable">
-        <thead><tr><th>Time</th><th>Symbol</th><th>Entry</th><th>Exit</th><th>PnL</th></tr></thead>
+        <thead><tr><th>Closed</th><th>Symbol</th><th>Strategy</th><th>Side</th><th>Qty</th><th>Entry</th><th>Exit</th><th>PnL</th><th>PnL %</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -96,34 +117,6 @@
     tbody.innerHTML = rows.map(r => '<tr>' + headers.map(h=>`<td>${r[h]}</td>`).join('') + '</tr>').join('');
   }
 
-  function fillSymbols(list) {
-    const sel = document.getElementById('symbol');
-    const opts = ['<option value="">All</option>'];
-    for (const s of list) opts.push(`<option value="${s}">${s}</option>`);
-    sel.innerHTML = opts.join('');
-  }
-
-  async function checkFile(url, id) {
-    try {
-      const res = await fetch(url, { method:'HEAD' });
-      document.getElementById(id).style.display = res.ok ? '' : 'none';
-    } catch {
-      document.getElementById(id).style.display = 'none';
-    }
-  }
-
-  async function fetchBacktest() {
-    try {
-      const res = await fetch('/analytics/backtest.csv');
-      if (!res.ok) return null;
-      const rows = parseCsv(await res.text());
-      if (!rows.length) return null;
-      return rows.map(r => ({ x: Number(r.ts), y: Number(r.equity) }));
-    } catch {
-      return null;
-    }
-  }
-
   let equityChart = new Chart(document.getElementById('equityChart'), {
     type:'line',
     data:{ datasets:[] },
@@ -134,88 +127,106 @@
     }
   });
 
-  let btData = null;
-
-  async function init() {
-    await Promise.all([
-      checkFile('/analytics/backtest.csv','downloadBacktest'),
-      checkFile('/analytics/optimize.csv','downloadOptimize'),
-      checkFile('/analytics/walkforward.csv','downloadWalkforward')
-    ]);
-    btData = await fetchBacktest();
-    const data = await fetch('/analytics/data').then(r=>r.json());
-    fillSymbols(data.symbols || []);
-    applyData(data);
-    updateDownloadLink(new URLSearchParams());
-  }
-
-  function updateDownloadLink(params) {
-    const q = params.toString();
-    document.getElementById('downloadTrades').href = '/analytics/trades.csv' + (q ? '?' + q : '');
-  }
-
-  async function loadData() {
+  function buildParams() {
     const params = new URLSearchParams();
-    const sym = document.getElementById('symbol').value;
+    const sym = document.getElementById('symbol').value.trim();
+    const strat = document.getElementById('strategy').value.trim();
     const from = document.getElementById('from').value;
     const to = document.getElementById('to').value;
+    const p = document.getElementById('params').value.trim();
+    if (sym) params.set('symbol', sym);
+    if (strat) params.set('strategy', strat);
     if (from) params.set('from', from);
     if (to) params.set('to', to);
-    if (sym) params.set('symbol', sym);
-    const data = await fetch('/analytics/data?' + params.toString()).then(r=>r.json());
-    applyData(data);
-    updateDownloadLink(params);
+    if (p) params.set('params', p);
+    return params;
   }
 
-  function applyData(data) {
-    const eq = data.equity || [];
-    const datasets = [];
-    if (btData && btData.length) datasets.push({ label:'Backtest Equity', data:btData, tension:0.2, pointRadius:0 });
-    const liveData = eq.map(p => ({ x: p.ts, y: p.equity }));
-    datasets.push({ label:'Live Equity', data:liveData, tension:0.2, pointRadius:0 });
-    equityChart.data.datasets = datasets;
-    equityChart.update();
-
-    const tblRows = (data.trades || []).map(t => ({
-      Time: new Date(t.closed_at).toLocaleString(),
-      Symbol: t.symbol,
-      Entry: t.entry_price,
-      Exit: t.exit_price,
-      PnL: t.pnl
-    }));
-    renderTable(document.getElementById('tradeTable'), tblRows);
-    document.getElementById('tradeEmpty').textContent = tblRows.length ? '' : 'No closed trades';
-  }
-
-  async function loadOptimize() {
+  async function loadOptimize(url) {
     try {
-      const res = await fetch('/analytics/optimize.csv');
-      if (!res.ok) throw new Error('no');
-      const rows = parseCsv(await res.text()).slice(0,20);
-      if (!rows.length) { document.getElementById('optEmpty').textContent = 'No data'; return; }
+      if (!url) throw new Error('no');
+      const rows = parseCsv(await fetch(url).then(r=>r.ok?r.text():'')).slice(0,20);
+      if (!rows.length) throw new Error('no');
       renderTable(document.getElementById('optTable'), rows);
+      document.getElementById('optEmpty').textContent = '';
     } catch {
       document.getElementById('optEmpty').textContent = 'No data';
+      renderTable(document.getElementById('optTable'), []);
     }
   }
 
-  async function loadWalkforward() {
+  async function loadWalkforward(url) {
     try {
-      const res = await fetch('/analytics/walkforward.csv');
-      if (!res.ok) throw new Error('no');
-      const rows = parseCsv(await res.text());
-      if (!rows.length) { document.getElementById('walkEmpty').textContent = 'No data'; return; }
+      if (!url) throw new Error('no');
+      const rows = parseCsv(await fetch(url).then(r=>r.ok?r.text():'')).slice(0,100);
+      if (!rows.length) throw new Error('no');
       renderTable(document.getElementById('walkTable'), rows);
+      document.getElementById('walkEmpty').textContent = '';
     } catch {
       document.getElementById('walkEmpty').textContent = 'No data';
+      renderTable(document.getElementById('walkTable'), []);
     }
   }
 
-  document.getElementById('reload').addEventListener('click', loadData);
+  async function apply() {
+    const params = buildParams();
+    const status = document.getElementById('status');
+    const btn = document.getElementById('apply');
+    status.textContent = 'Loading...';
+    btn.disabled = true;
+    try {
+      const data = await fetch('/analytics?' + params.toString()).then(r=>r.json());
+      const eqData = (data.equity||[]).map(p=>({x:p.ts,y:p.equity}));
+      equityChart.data.datasets = [{ label:'Equity', data:eqData, tension:0.2, pointRadius:0 }];
+      equityChart.update();
+      document.getElementById('equityEmpty').textContent = eqData.length ? '' : 'No data for selected filters';
 
-  init();
-  loadOptimize();
-  loadWalkforward();
+      const tblRows = (data.closedTrades||[]).map(t=>({
+        closed_at: new Date(t.closed_at).toLocaleString(),
+        symbol: t.symbol,
+        strategy: t.strategy,
+        side: t.side,
+        qty: t.qty,
+        entry_price: t.entry_price,
+        exit_price: t.exit_price,
+        pnl: t.pnl,
+        pnl_pct: t.pnl_pct,
+      }));
+      renderTable(document.getElementById('tradeTable'), tblRows);
+      document.getElementById('tradeEmpty').textContent = tblRows.length ? '' : 'No closed trades';
+
+      const s = data.stats || {};
+      const fmtPct = v => v==null? '': (v*100).toFixed(2)+'%';
+      const fmt = v => v==null? '': Number(v).toFixed(2);
+      document.getElementById('stat-totalTrades').textContent = s.totalTrades ?? 0;
+      document.getElementById('stat-winRate').textContent = fmtPct(s.winRate);
+      document.getElementById('stat-avgPnL').textContent = fmt(s.avgPnL);
+      document.getElementById('stat-avgPnLPct').textContent = fmtPct(s.avgPnLPct);
+      document.getElementById('stat-profitFactor').textContent = fmt(s.profitFactor);
+      document.getElementById('stat-maxDrawdown').textContent = fmtPct(s.maxDrawdown);
+      document.getElementById('stat-sharpe').textContent = fmt(s.sharpe);
+      document.getElementById('stat-sortino').textContent = fmt(s.sortino);
+      document.getElementById('stat-cagr').textContent = fmtPct(s.cagr);
+
+      const q = params.toString();
+      document.getElementById('downloadTrades').href = '/analytics/trades.csv' + (q?'?'+q:'');
+      document.getElementById('downloadBacktest').href = data.csv?.backtest || '#';
+      document.getElementById('downloadOptimize').href = data.csv?.optimize || '#';
+      document.getElementById('downloadWalkforward').href = data.csv?.walkforward || '#';
+
+      loadOptimize(data.csv?.optimize);
+      loadWalkforward(data.csv?.walkforward);
+      status.textContent = '';
+    } catch (e) {
+      console.error(e);
+      status.textContent = 'Failed to load analytics';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  document.getElementById('apply').addEventListener('click', apply);
+  apply();
 </script>
 </body>
 </html>
