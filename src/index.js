@@ -300,57 +300,78 @@ app.get('/live/history', async (req, res) => {
     return Number.isNaN(t) ? null : t;
   };
 
+  const parseParams = (raw) => {
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      const obj = {};
+      for (const part of String(raw).split(/[;,]/)) {
+        const [k, v] = part.split('=').map(s => s.trim());
+        if (k && v) obj[k] = isNaN(v) ? v : Number(v);
+      }
+      return Object.keys(obj).length ? obj : null;
+    }
+  };
+
+  const symbol = (req.query.symbol || '').toString().trim() || null;
+  const strategy = (req.query.strategy || '').toString().trim() || null;
   const fromMs = parseDateMs(req.query.from);
   const toMs = parseDateMs(req.query.to);
+  const paramsObj = parseParams(req.query.params);
 
   res.set('Cache-Control', 'no-store');
 
   try {
     const q = `
-      SELECT id, ts, entry_price, exit_price, pnl
+      SELECT id, opened_at, closed_at, symbol, strategy, side, qty,
+             entry_price, exit_price, pnl, pnl_pct, params
       FROM paper_trades
-      WHERE status='CLOSED'
-        AND ($1::bigint IS NULL OR ts >= $1::bigint)
-        AND ($2::bigint IS NULL OR ts <  $2::bigint)
-      ORDER BY ts ASC
-      LIMIT 5000
+      WHERE status = 'CLOSED'
+        AND ($1::text  IS NULL OR symbol   = $1::text)
+        AND ($2::text  IS NULL OR strategy = $2::text)
+        AND ($3::bigint IS NULL OR closed_at >= $3::bigint)
+        AND ($4::bigint IS NULL OR closed_at <= $4::bigint)
+        AND ($5::jsonb IS NULL OR params @> $5::jsonb)
+      ORDER BY closed_at DESC
+      LIMIT 500
     `;
-    const { rows } = await db.query(q, [fromMs, toMs]);
-    const trades = rows.map(r => ({
-      id: Number(r.id),
-      ts: Number(r.ts),
-      entry_price: Number(r.entry_price ?? 0),
-      exit_price: Number(r.exit_price ?? 0),
-      pnl: Number(r.pnl ?? 0),
+    const { rows } = await db.query(q, [
+      symbol,
+      strategy,
+      fromMs,
+      toMs,
+      paramsObj ? JSON.stringify(paramsObj) : null,
+    ]);
+
+    const closedTrades = rows.map(r => ({
+      id: r.id,
+      opened_at: r.opened_at ? Number(r.opened_at) : null,
+      closed_at: r.closed_at ? Number(r.closed_at) : null,
+      symbol: r.symbol,
+      strategy: r.strategy,
+      side: r.side,
+      qty: r.qty ? Number(r.qty) : null,
+      entry_price: r.entry_price ? Number(r.entry_price) : null,
+      exit_price: r.exit_price ? Number(r.exit_price) : null,
+      pnl: r.pnl ? Number(r.pnl) : 0,
+      pnl_pct: r.pnl_pct ? Number(r.pnl_pct) : 0,
+      params: r.params || null,
     }));
 
-    const equity = [];
-    let eq = 0;
-    let peak = -Infinity;
-    let maxDD = 0;
-    let wins = 0;
-    for (const t of trades) {
-      eq += t.pnl || 0;
-      if (eq > peak) peak = eq;
-      const dd = peak - eq;
-      if (dd > maxDD) maxDD = dd;
-      if ((t.pnl || 0) > 0) wins++;
-      equity.push({ ts: t.ts, equity: Number(eq.toFixed(2)) });
-    }
-
-    const summary = {
-      trades: trades.length,
-      pnl: Number(eq.toFixed(2)),
-      winRate: trades.length ? Number((wins / trades.length * 100).toFixed(2)) : 0,
-      maxDrawdown: Number(maxDD.toFixed(2)),
-    };
-
-    const symbol = process.env.SYMBOL || 'BTCUSDT';
-
-    res.json({ ok: true, symbol, trades, equity, summary });
+    return res.json({
+      filters: {
+        symbol,
+        strategy,
+        from: fromMs ? new Date(fromMs).toISOString() : null,
+        to: toMs ? new Date(toMs).toISOString() : null,
+        params: paramsObj,
+      },
+      closedTrades,
+    });
   } catch (e) {
     console.error('[/live/history] db error:', e);
-    res.status(500).json({ ok: false, error: 'db_error' });
+    res.status(500).json({ error: 'db_error' });
   }
 });
 
