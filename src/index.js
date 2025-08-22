@@ -17,6 +17,19 @@ const app = express();
 // Alias db pool for clarity
 const pool = db;
 
+async function loadClosedPnLSince(fromMs = null) {
+  const q = `
+    SELECT ts, pnl
+    FROM paper_trades
+    WHERE status='CLOSED'
+      AND ($1::bigint IS NULL OR ts >= $1::bigint)
+    ORDER BY ts ASC
+    LIMIT 20000
+  `;
+  const { rows } = await db.query(q, [fromMs]);
+  return rows.map(r => ({ ts: Number(r.ts), pnl: Number(r.pnl ?? 0) }));
+}
+
 app.use(cors());
 app.use(cookieParser());
 
@@ -178,6 +191,106 @@ app.get('/live/config', async (_req, res) => {
 app.post('/live/config', express.json(), async (req, res) => {
   const saved = await setLiveConfig(req.body || {});
   res.json(saved);
+});
+
+// GET /live/equity?from=YYYY-MM-DD
+app.get('/live/equity', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const fromStr = (req.query.from || '').toString().trim();
+  const fromMs = fromStr ? (Number.isNaN(Date.parse(fromStr)) ? null : Date.parse(fromStr)) : null;
+
+  try {
+    const rows = await loadClosedPnLSince(fromMs);
+    let eq = 0, peak = -Infinity, maxDD = 0;
+    const equity = rows.map(r => {
+      eq += r.pnl || 0;
+      if (eq > peak) peak = eq;
+      const dd = peak - eq;
+      if (dd > maxDD) maxDD = dd;
+      return { ts: r.ts, equity: eq };
+    });
+
+    return res.json({
+      ok: true,
+      from: fromMs,
+      points: equity,
+      lastTs: equity.length ? equity[equity.length - 1].ts : null,
+      lastEq: equity.length ? equity[equity.length - 1].equity : 0,
+      maxDrawdown: Number(maxDD.toFixed(2)),
+    });
+  } catch (e) {
+    console.error('[/live/equity] error:', e);
+    return res.status(500).json({ ok: false, error: 'db_error' });
+  }
+});
+
+// GET /live/equity/stream?from=YYYY-MM-DD
+// Server-Sent Events srautas: kas 2s tikrina naujus CLOSED trade'us, pildo equity taškus ir siunčia tik naujus
+app.get('/live/equity/stream', async (req, res) => {
+  // SSE antraštės
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-store',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  const send = (event, data) => {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const fromStr = (req.query.from || '').toString().trim();
+  let fromMs = fromStr ? (Number.isNaN(Date.parse(fromStr)) ? null : Date.parse(fromStr)) : null;
+
+  let lastTs = fromMs || null;
+  let eq = 0; // sukaupsim pagal atsiųstus taškus šiame ryšyje
+
+  try {
+    // inicialus dump nuo fromMs
+    const rows = await loadClosedPnLSince(fromMs);
+    const initPoints = [];
+    for (const r of rows) {
+      eq += r.pnl || 0;
+      initPoints.push({ ts: r.ts, equity: eq });
+      lastTs = r.ts;
+    }
+    send('init', {
+      ok: true,
+      points: initPoints,
+      lastTs,
+      lastEq: eq,
+    });
+  } catch (e) {
+    console.error('[/live/equity/stream] init error:', e);
+    send('error', { ok: false, error: 'db_error' });
+  }
+
+  // polling ciklas kas 2s
+  const timer = setInterval(async () => {
+    try {
+      // imame naujesnius nei lastTs
+      const rows = await loadClosedPnLSince(lastTs != null ? (lastTs + 1) : null);
+      const newPoints = [];
+      for (const r of rows) {
+        eq += r.pnl || 0;
+        newPoints.push({ ts: r.ts, equity: eq });
+        lastTs = r.ts;
+      }
+      if (newPoints.length) {
+        send('tick', { points: newPoints, lastTs, lastEq: eq });
+      }
+    } catch (e) {
+      console.error('[/live/equity/stream] poll error:', e);
+      send('error', { ok: false, error: 'db_error' });
+    }
+  }, 2000);
+
+  // ryšio uždarymas
+  req.on('close', () => {
+    clearInterval(timer);
+    try { res.end(); } catch (_) {}
+  });
 });
 
 app.get('/live/history', async (req, res) => {

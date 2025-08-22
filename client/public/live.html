@@ -37,6 +37,21 @@
   <canvas id="realEquityChart" width="600" height="200"></canvas>
   <table id="realTradesTable" border="1"><thead><tr><th>Time</th><th>Entry</th><th>Exit</th><th>PnL</th></tr></thead><tbody></tbody></table>
 
+  <section class="card">
+    <h2>Real-time equity (DB)</h2>
+
+    <div class="row">
+      <label>From:
+        <input type="date" id="dbFrom">
+      </label>
+      <button id="dbConnectBtn">Connect</button>
+      <button id="dbDisconnectBtn" disabled>Disconnect</button>
+    </div>
+
+    <canvas id="dbEquityChart" width="900" height="300" style="border:1px solid #ddd;"></canvas>
+    <div id="dbEquityStats" class="muted" style="margin-top:8px;"></div>
+  </section>
+
   <script>
 async function loadCfg() {
   const c = await fetch('/live/config').then(r=>r.json());
@@ -121,6 +136,137 @@ function drawRealEquity(points) {
 
 document.getElementById('histLoadBtn').addEventListener('click', loadRealHistory);
 loadRealHistory();
+  </script>
+
+  <script>
+(function() {
+  const cvs = document.getElementById('dbEquityChart');
+  const ctx = cvs.getContext('2d');
+  const statsEl = document.getElementById('dbEquityStats');
+  const fromEl = document.getElementById('dbFrom');
+  const btnConnect = document.getElementById('dbConnectBtn');
+  const btnDisconnect = document.getElementById('dbDisconnectBtn');
+
+  let evtSrc = null;     // EventSource
+  let points = [];       // {ts, equity}
+  let minX=0, maxX=1, minY=0, maxY=1;
+
+  function isoDateToInput(ms) {
+    const d = new Date(ms);
+    return d.toISOString().slice(0,10);
+  }
+
+  function fitBounds() {
+    if (!points.length) { minX=0; maxX=1; minY=0; maxY=1; return; }
+    minX = points[0].ts;
+    maxX = points[points.length - 1].ts;
+    minY = Math.min(...points.map(p => p.equity));
+    maxY = Math.max(...points.map(p => p.equity));
+    if (minY === maxY) { minY -= 1; maxY += 1; }
+    if (minX === maxX) { minX -= 1; maxX += 1; }
+  }
+
+  function draw() {
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+    if (!points.length) return;
+    fitBounds();
+    const pad = 30;
+    const W = cvs.width - pad*2;
+    const H = cvs.height - pad*2;
+    const xTo = (x) => pad + (x - minX) / (maxX - minX) * W;
+    const yTo = (y) => pad + (maxY - y) / (maxY - minY) * H;
+
+    // axes
+    ctx.beginPath();
+    ctx.moveTo(pad, pad);
+    ctx.lineTo(pad, pad + H);
+    ctx.lineTo(pad + W, pad + H);
+    ctx.stroke();
+
+    // line
+    ctx.beginPath();
+    for (let i=0;i<points.length;i++) {
+      const p = points[i];
+      const x = xTo(p.ts);
+      const y = yTo(p.equity);
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+
+  function setStats() {
+    if (!points.length) { statsEl.textContent = 'No data'; return; }
+    let peak = -Infinity, maxDD = 0;
+    for (const p of points) {
+      if (p.equity > peak) peak = p.equity;
+      const dd = peak - p.equity;
+      if (dd > maxDD) maxDD = dd;
+    }
+    const last = points[points.length - 1].equity;
+    statsEl.textContent = `Points: ${points.length} | Equity: ${last.toFixed(2)} | MaxDD: ${maxDD.toFixed(2)}`;
+  }
+
+  async function primeOnce(fromStr) {
+    const q = fromStr ? `?from=${encodeURIComponent(fromStr)}` : '';
+    const r = await fetch(`/live/equity${q}`);
+    const j = await r.json();
+    if (j.ok) {
+      points = j.points || [];
+      draw();
+      setStats();
+    }
+  }
+
+  function connect() {
+    const fromStr = fromEl.value ? fromEl.value : '';
+    const url = fromStr ? `/live/equity/stream?from=${encodeURIComponent(fromStr)}` : '/live/equity/stream';
+    evtSrc = new EventSource(url);
+
+    evtSrc.addEventListener('init', (ev) => {
+      const data = JSON.parse(ev.data);
+      const pts = data.points || [];
+      if (pts.length) {
+        points = pts;
+        draw();
+        setStats();
+      }
+    });
+
+    evtSrc.addEventListener('tick', (ev) => {
+      const data = JSON.parse(ev.data);
+      const pts = data.points || [];
+      if (pts.length) {
+        points.push(...pts);
+        draw();
+        setStats();
+      }
+    });
+
+    evtSrc.addEventListener('error', () => {
+      // Tyliai – naršyklė bandys reconnectint; jei uždarom mes — bus closed
+    });
+
+    btnConnect.disabled = true;
+    btnDisconnect.disabled = false;
+  }
+
+  function disconnect() {
+    if (evtSrc) { evtSrc.close(); evtSrc = null; }
+    btnConnect.disabled = false;
+    btnDisconnect.disabled = true;
+  }
+
+  // init UI
+  const now = Date.now();
+  fromEl.value = isoDateToInput(now - 7*24*3600*1000); // default – paskutinės 7 d.
+
+  btnConnect.addEventListener('click', async () => {
+    await primeOnce(fromEl.value); // pasikraunam pradinę kreivę
+    connect();                     // tada prisijungiam prie SSE
+  });
+  btnDisconnect.addEventListener('click', disconnect);
+
+})();
   </script>
 </body>
 </html>
