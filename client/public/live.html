@@ -28,6 +28,14 @@
 
   <h2>Trades</h2>
   <table border="1"><thead><tr><th>Time</th><th>Entry</th><th>Exit</th><th>PnL</th></tr></thead><tbody id="tbody"></tbody></table>
+  <h2>Real Trades</h2>
+  <form id="histForm">
+    <label>From: <input type="date" id="histFrom"></label>
+    <label>To: <input type="date" id="histTo"></label>
+    <button type="button" id="histLoadBtn">Load</button>
+  </form>
+  <canvas id="realEquityChart" width="600" height="200"></canvas>
+  <table id="realTradesTable" border="1"><thead><tr><th>Time</th><th>Entry</th><th>Exit</th><th>PnL</th></tr></thead><tbody></tbody></table>
 
   <script>
 async function loadCfg() {
@@ -75,6 +83,44 @@ const chart = new Chart(ctx,{type:'line',data:{labels:[],datasets:[{label:'Equit
 setInterval(refresh,5000);
 loadCfg();
 refresh();
+
+async function loadRealHistory() {
+  const params = new URLSearchParams();
+  if (histFrom.value) params.append('from', histFrom.value);
+  if (histTo.value) params.append('to', histTo.value);
+  const res = await fetch('/live/history?' + params.toString());
+  const data = await res.json();
+  const tbody = document.querySelector('#realTradesTable tbody');
+  tbody.innerHTML = '';
+  (data.trades || []).forEach(t => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${new Date(t.ts).toISOString()}</td><td>${t.entry_price}</td><td>${t.exit_price}</td><td>${t.pnl}</td>`;
+    tbody.appendChild(tr);
+  });
+  drawRealEquity(data.equity || []);
+}
+
+function drawRealEquity(points) {
+  const c = document.getElementById('realEquityChart');
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,c.width,c.height);
+  if (!points.length) return;
+  const minTs = points[0].ts;
+  const maxTs = points[points.length - 1].ts;
+  let minEq = Math.min(...points.map(p=>p.equity));
+  let maxEq = Math.max(...points.map(p=>p.equity));
+  if (maxEq === minEq) { minEq -= 1; maxEq += 1; }
+  ctx.beginPath();
+  points.forEach((p,i) => {
+    const x = maxTs === minTs ? 0 : (p.ts - minTs) / (maxTs - minTs) * c.width;
+    const y = c.height - (p.equity - minEq) / (maxEq - minEq) * c.height;
+    if (i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+}
+
+document.getElementById('histLoadBtn').addEventListener('click', loadRealHistory);
+loadRealHistory();
   </script>
 </body>
 </html>
