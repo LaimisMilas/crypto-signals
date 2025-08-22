@@ -243,45 +243,28 @@ setInterval(loadClosedTrades, 30000);
     statsEl.textContent = `Points: ${points.length} | Equity: ${last.toFixed(2)} | MaxDD: ${maxDD.toFixed(2)}`;
   }
 
-  async function primeOnce(fromStr) {
-    const q = fromStr ? `?from=${encodeURIComponent(fromStr)}` : '';
-    const r = await fetch(`/live/equity${q}`);
-    const j = await r.json();
-    if (j.ok) {
-      points = j.points || [];
-      draw();
-      setStats();
-    }
-  }
-
   function connect() {
-    const fromStr = fromEl.value ? fromEl.value : '';
-    const url = fromStr ? `/live/equity/stream?from=${encodeURIComponent(fromStr)}` : '/live/equity/stream';
+    const params = [];
+    if (fromEl.value) params.push(`from=${encodeURIComponent(fromEl.value)}`);
+    const url = params.length ? `/live/equity-stream?${params.join('&')}` : '/live/equity-stream';
     evtSrc = new EventSource(url);
 
-    evtSrc.addEventListener('init', (ev) => {
+    evtSrc.onmessage = (ev) => {
       const data = JSON.parse(ev.data);
-      const pts = data.points || [];
-      if (pts.length) {
-        points = pts;
+      if (data.type === 'init') {
+        points = data.equity || [];
+        draw();
+        setStats();
+      } else if (data.type === 'append' && data.point) {
+        points.push(data.point);
         draw();
         setStats();
       }
-    });
+    };
 
-    evtSrc.addEventListener('tick', (ev) => {
-      const data = JSON.parse(ev.data);
-      const pts = data.points || [];
-      if (pts.length) {
-        points.push(...pts);
-        draw();
-        setStats();
-      }
-    });
-
-    evtSrc.addEventListener('error', () => {
-      // Tyliai – naršyklė bandys reconnectint; jei uždarom mes — bus closed
-    });
+    evtSrc.onerror = () => {
+      // Silent – browser will retry
+    };
 
     btnConnect.disabled = true;
     btnDisconnect.disabled = false;
@@ -297,10 +280,7 @@ setInterval(loadClosedTrades, 30000);
   const now = Date.now();
   fromEl.value = isoDateToInput(now - 7*24*3600*1000); // default – paskutinės 7 d.
 
-  btnConnect.addEventListener('click', async () => {
-    await primeOnce(fromEl.value); // pasikraunam pradinę kreivę
-    connect();                     // tada prisijungiam prie SSE
-  });
+  btnConnect.addEventListener('click', connect);
   btnDisconnect.addEventListener('click', disconnect);
 
 })();

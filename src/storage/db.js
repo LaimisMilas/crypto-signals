@@ -13,6 +13,22 @@ export const db = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
+// Subscribe to PostgreSQL LISTEN/NOTIFY channel
+// Returns a function that releases the listener
+export async function listen(channel, handler) {
+  const client = await db.connect();
+  const onNotify = (msg) => {
+    if (msg.channel === channel) handler(msg.payload);
+  };
+  await client.query(`LISTEN ${channel}`);
+  client.on('notification', onNotify);
+  return async () => {
+    try { await client.query(`UNLISTEN ${channel}`); } catch { /* ignore */ }
+    client.removeListener('notification', onNotify);
+    client.release();
+  };
+}
+
 export async function init() {
   const schema = readFileSync(new URL('./schema.pg.sql', import.meta.url), 'utf-8');
   await db.query(schema);
