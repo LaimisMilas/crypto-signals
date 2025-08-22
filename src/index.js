@@ -356,125 +356,216 @@ app.get('/live/history', async (req, res) => {
 
 // --- Analytics dashboard ---
 
-// Serve static analytics assets (CSV/HTML) from client/public
-app.get('/analytics', (_req, res) => {
+// Serve static analytics dashboard
+app.get('/analytics.html', (_req, res) => {
   res.sendFile(path.join(publicDir, 'analytics.html'));
 });
 
-app.get('/analytics/data', async (req, res) => {
+// Analytics API
+app.get('/analytics', async (req, res) => {
   const parseDateMs = (v) => {
     if (!v) return null;
     const t = Date.parse(String(v));
     return Number.isNaN(t) ? null : t;
-    // from/to naudosim kaip ms -> Postgres BIGINT
   };
 
-  const fromMs = parseDateMs(req.query.from);
-  const toMs   = parseDateMs(req.query.to);
+  const parseParams = (raw) => {
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      const obj = {};
+      for (const part of String(raw).split(/[;,]/)) {
+        const [k, v] = part.split('=').map(s => s.trim());
+        if (k && v) obj[k] = isNaN(v) ? v : Number(v);
+      }
+      return Object.keys(obj).length ? obj : null;
+    }
+  };
 
-  // Schema neturi symbol; UI’ui grąžinam bent vieną reikšmę
-  const defaultSymbol = process.env.SYMBOL || 'BTCUSDT';
-  const uiSymbol = (req.query.symbol || '').toString().trim() || defaultSymbol;
+  const symbol = (req.query.symbol || '').toString().trim() || null;
+  const strategy = (req.query.strategy || '').toString().trim() || null;
+  const interval = (req.query.interval || '').toString().trim() || null;
+  const fromMs = parseDateMs(req.query.from);
+  const toMs = parseDateMs(req.query.to);
+  const paramsObj = parseParams(req.query.params);
 
   res.set('Cache-Control', 'no-store');
 
-  // symbols drop-down’ui
-  const symbols = [defaultSymbol];
-
-  // Pasiimam tik CLOSED įrašus, ts naudojam kaip "closed_at"
-  let trades = [];
+  let rows = [];
   try {
     const q = `
-      SELECT id, ts, entry_price, exit_price, pnl
+      SELECT id, opened_at, closed_at, symbol, strategy, side, qty, entry_price, exit_price, pnl, pnl_pct, params
       FROM paper_trades
       WHERE status = 'CLOSED'
-        AND ($1::bigint IS NULL OR ts >= $1::bigint)
-        AND ($2::bigint IS NULL OR ts <  $2::bigint)
-      ORDER BY ts ASC
-      LIMIT 5000
+        AND ($1::bigint IS NULL OR closed_at >= $1::bigint)
+        AND ($2::bigint IS NULL OR closed_at <  $2::bigint)
+        AND ($3::text  IS NULL OR symbol   = $3::text)
+        AND ($4::text  IS NULL OR strategy = $4::text)
+        AND ($5::jsonb IS NULL OR params @> $5::jsonb)
+      ORDER BY closed_at ASC
+      LIMIT 50000
     `;
-    const { rows } = await db.query(q, [fromMs, toMs]);
-    trades = rows.map(r => ({
-      id: r.id,
-      symbol: uiSymbol,                 // dekoratyvinis, kol lentelėje nėra symbol
-      opened_at: null,                  // neturime atidarymo timestamp
-      closed_at: Number(r.ts),          // ts = uždarymo momentas
-      entry_price: Number(r.entry_price ?? 0),
-      exit_price: Number(r.exit_price ?? 0),
-      pnl: Number(r.pnl ?? 0),
-    }));
+    const { rows: dbRows } = await db.query(q, [fromMs, toMs, symbol, strategy, paramsObj ? JSON.stringify(paramsObj) : null]);
+    rows = dbRows;
   } catch (e) {
-    console.error('[/analytics/data] db error:', e);
-    return res.status(500).json({ ok: false, error: 'db_error' });
+    console.error('[/analytics] db error:', e);
+    return res.status(500).json({ error: 'db_error' });
   }
 
-  // Equity + statistika
-  let equity = [];
-  let eq = 0;
-  let peak = -Infinity;
+  const closedTrades = rows.map(r => ({
+    id: r.id,
+    opened_at: r.opened_at ? Number(r.opened_at) : null,
+    closed_at: r.closed_at ? Number(r.closed_at) : null,
+    symbol: r.symbol,
+    strategy: r.strategy,
+    side: r.side,
+    qty: r.qty ? Number(r.qty) : null,
+    entry_price: r.entry_price ? Number(r.entry_price) : null,
+    exit_price: r.exit_price ? Number(r.exit_price) : null,
+    pnl: r.pnl ? Number(r.pnl) : 0,
+    pnl_pct: r.pnl_pct ? Number(r.pnl_pct) : 0,
+    params: r.params || null,
+  }));
+
+  const equity = [];
+  const returns = [];
+  let eq = 10000;
+  let peak = eq;
   let maxDD = 0;
-  let wins = 0;
-
-  for (const t of trades) {
+  for (const t of closedTrades) {
+    const prevEq = eq;
     eq += t.pnl || 0;
+    equity.push({ ts: t.closed_at, equity: Number(eq.toFixed(2)) });
     if (eq > peak) peak = eq;
-    const dd = peak - eq;
-    if (dd > maxDD) maxDD = dd;
-    if ((t.pnl || 0) > 0) wins++;
-    equity.push({ ts: t.closed_at, equity: eq });
+    const dd = (eq - peak) / peak;
+    if (dd < maxDD) maxDD = dd;
+    if (prevEq > 0) returns.push((eq - prevEq) / prevEq);
   }
 
-  const summary = {
-    trades: trades.length,
-    pnl: Number(eq.toFixed(2)),
-    winRate: trades.length ? Number((wins / trades.length * 100).toFixed(2)) : 0,
-    maxDrawdown: Number(maxDD.toFixed(2)),
+  const avg = arr => arr.reduce((a, b) => a + b, 0) / (arr.length || 1);
+  const std = arr => {
+    if (arr.length <= 1) return 0;
+    const m = avg(arr);
+    return Math.sqrt(arr.reduce((a, b) => a + Math.pow(b - m, 2), 0) / (arr.length - 1));
   };
 
-  return res.json({ ok: true, symbols, summary, equity, trades });
+  const total = closedTrades.length;
+  const wins = closedTrades.filter(t => (t.pnl || 0) > 0);
+  const profit = wins.reduce((a, b) => a + (b.pnl || 0), 0);
+  const losses = closedTrades.filter(t => (t.pnl || 0) < 0);
+  const loss = losses.reduce((a, b) => a + (b.pnl || 0), 0);
+  const avgPnL = total ? (profit + loss) / total : 0;
+  const avgPnLPct = total ? closedTrades.reduce((a, b) => a + (b.pnl_pct || 0), 0) / total : 0;
+  const profitFactor = loss !== 0 ? profit / Math.abs(loss) : null;
+  const winRate = total ? wins.length / total : 0;
+  const sharpe = returns.length > 1 ? (avg(returns) / std(returns)) * Math.sqrt(252) : null;
+  const downside = returns.filter(r => r < 0);
+  const sortino = downside.length > 1 ? (avg(returns) / std(downside)) * Math.sqrt(252) : null;
+  const cagr = equity.length > 1 && fromMs && toMs && toMs > fromMs
+    ? Math.pow(equity[equity.length - 1].equity / 10000, 31557600000 / (toMs - fromMs)) - 1
+    : null;
+
+  const stats = {
+    totalTrades: total,
+    winRate,
+    avgPnL,
+    avgPnLPct,
+    profitFactor,
+    maxDrawdown: maxDD,
+    sharpe,
+    sortino,
+    cagr,
+  };
+
+  const q = new URLSearchParams();
+  if (symbol) q.set('symbol', symbol);
+  if (strategy) q.set('strategy', strategy);
+  if (fromMs) q.set('from', new Date(fromMs).toISOString());
+  if (toMs) q.set('to', new Date(toMs).toISOString());
+  if (paramsObj) q.set('params', JSON.stringify(paramsObj));
+  const qs = q.toString();
+
+  return res.json({
+    filters: {
+      symbol,
+      strategy,
+      from: fromMs ? new Date(fromMs).toISOString() : null,
+      to: toMs ? new Date(toMs).toISOString() : null,
+      params: paramsObj,
+      interval,
+    },
+    equity,
+    closedTrades,
+    stats,
+    csv: {
+      backtest: `/analytics/backtest.csv${qs ? `?${qs}` : ''}`,
+      optimize: `/analytics/optimize.csv${qs ? `?${qs}` : ''}`,
+      walkforward: `/analytics/walkforward.csv${qs ? `?${qs}` : ''}`,
+    },
+  });
 });
 
 app.get('/analytics/trades.csv', async (req, res) => {
   try {
-    const fromIso = req.query.from;
-    const toIso = req.query.to;
-    const symbolParam = req.query.symbol;
+    const parseDateMs = (v) => {
+      if (!v) return null;
+      const t = Date.parse(String(v));
+      return Number.isNaN(t) ? null : t;
+    };
 
-    const fromMs = Number.isFinite(Date.parse(fromIso)) ? Date.parse(fromIso) : null;
-    const toMs   = Number.isFinite(Date.parse(toIso))   ? Date.parse(toIso)   : null;
+    const parseParams = (raw) => {
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        const obj = {};
+        for (const part of String(raw).split(/[;,]/)) {
+          const [k, v] = part.split('=').map(s => s.trim());
+          if (k && v) obj[k] = isNaN(v) ? v : Number(v);
+        }
+        return Object.keys(obj).length ? obj : null;
+      }
+    };
 
-    const defaultSymbol = process.env.SYMBOL || 'BTCUSDT';
+    const fromMs = parseDateMs(req.query.from);
+    const toMs = parseDateMs(req.query.to);
+    const symbol = (req.query.symbol || '').toString().trim() || null;
+    const strategy = (req.query.strategy || '').toString().trim() || null;
+    const paramsObj = parseParams(req.query.params);
 
     const client = await pool.connect();
     try {
       const q = `
-        SELECT id, ts, entry_price, exit_price, pnl, status
+        SELECT id, opened_at, closed_at, symbol, strategy, side, qty, entry_price, exit_price, pnl, pnl_pct
         FROM paper_trades
-        WHERE status='CLOSED'
-          AND ($1::bigint IS NULL OR ts >= $1::bigint)
-          AND ($2::bigint IS NULL OR ts <  $2::bigint)
-        ORDER BY ts ASC
+        WHERE status = 'CLOSED'
+          AND ($1::bigint IS NULL OR closed_at >= $1::bigint)
+          AND ($2::bigint IS NULL OR closed_at <  $2::bigint)
+          AND ($3::text  IS NULL OR symbol   = $3::text)
+          AND ($4::text  IS NULL OR strategy = $4::text)
+          AND ($5::jsonb IS NULL OR params @> $5::jsonb)
+        ORDER BY closed_at ASC
         LIMIT 50000
       `;
-      const { rows } = await client.query(q, [fromMs, toMs]);
+      const { rows } = await client.query(q, [fromMs, toMs, symbol, strategy, paramsObj ? JSON.stringify(paramsObj) : null]);
 
-      const header = 'id,symbol,opened_at,closed_at,entry_price,exit_price,pnl';
-      const lines = rows.map(r => {
-        const sym = symbolParam || defaultSymbol;
-        const openedAt = '';           // neturim – tuščia
-        const closedAt = r.ts;         // ts naudojam kaip uždarymo laiką
-        return [
-          r.id,
-          sym,
-          openedAt,
-          closedAt,
-          Number(r.entry_price ?? 0),
-          Number(r.exit_price ?? 0),
-          Number(r.pnl ?? 0),
-        ].join(',');
-      });
+      const header = 'id,opened_at,closed_at,symbol,strategy,side,qty,entry_price,exit_price,pnl,pnl_pct';
+      const lines = rows.map(r => [
+        r.id,
+        r.opened_at || '',
+        r.closed_at || '',
+        r.symbol || '',
+        r.strategy || '',
+        r.side || '',
+        r.qty || '',
+        r.entry_price || '',
+        r.exit_price || '',
+        r.pnl || '',
+        r.pnl_pct || '',
+      ].join(','));
 
-      const csv = [header, ...lines].join('\\n');
+      const csv = [header, ...lines].join('\n');
       res.set('Cache-Control', 'no-store');
       res.set('Content-Type', 'text/csv; charset=utf-8');
       res.set('Content-Disposition', 'attachment; filename="trades.csv"');
