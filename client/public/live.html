@@ -32,7 +32,7 @@
   <h2>Closed Trades</h2>
   <div id="historyFilters">
     <label>Symbol: <input id="histSymbol"></label>
-    <label>Strategy: <input id="histStrategy"></label>
+    <label>Strategy: <select id="histStrategy"></select></label>
     <label>From: <input type="datetime-local" id="histFrom"></label>
     <label>To: <input type="datetime-local" id="histTo"></label>
     <button type="button" id="histRefreshBtn">Refresh</button>
@@ -171,7 +171,20 @@ document.getElementById('histRefreshBtn').addEventListener('click', loadClosedTr
 const now = new Date();
 histTo.value = new Date(now).toISOString().slice(0,16);
 histFrom.value = new Date(now.getTime() - 24*60*60*1000).toISOString().slice(0,16);
-loadClosedTrades();
+async function loadStrategyOptions() {
+  histStrategy.innerHTML = '<option value="">All</option>';
+  try {
+    const arr = await fetch('/strategies').then(r => r.json());
+    arr.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.label || s.id;
+      histStrategy.appendChild(opt);
+    });
+  } catch {}
+}
+
+loadStrategyOptions().then(loadClosedTrades);
 setInterval(loadClosedTrades, 30000);
   </script>
 
