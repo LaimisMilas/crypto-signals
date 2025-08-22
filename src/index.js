@@ -180,6 +180,67 @@ app.post('/live/config', express.json(), async (req, res) => {
   res.json(saved);
 });
 
+app.get('/live/history', async (req, res) => {
+  const parseDateMs = (v) => {
+    if (!v) return null;
+    const t = Date.parse(String(v));
+    return Number.isNaN(t) ? null : t;
+  };
+
+  const fromMs = parseDateMs(req.query.from);
+  const toMs = parseDateMs(req.query.to);
+
+  res.set('Cache-Control', 'no-store');
+
+  try {
+    const q = `
+      SELECT id, ts, entry_price, exit_price, pnl
+      FROM paper_trades
+      WHERE status='CLOSED'
+        AND ($1::bigint IS NULL OR ts >= $1::bigint)
+        AND ($2::bigint IS NULL OR ts <  $2::bigint)
+      ORDER BY ts ASC
+      LIMIT 5000
+    `;
+    const { rows } = await db.query(q, [fromMs, toMs]);
+    const trades = rows.map(r => ({
+      id: Number(r.id),
+      ts: Number(r.ts),
+      entry_price: Number(r.entry_price ?? 0),
+      exit_price: Number(r.exit_price ?? 0),
+      pnl: Number(r.pnl ?? 0),
+    }));
+
+    const equity = [];
+    let eq = 0;
+    let peak = -Infinity;
+    let maxDD = 0;
+    let wins = 0;
+    for (const t of trades) {
+      eq += t.pnl || 0;
+      if (eq > peak) peak = eq;
+      const dd = peak - eq;
+      if (dd > maxDD) maxDD = dd;
+      if ((t.pnl || 0) > 0) wins++;
+      equity.push({ ts: t.ts, equity: Number(eq.toFixed(2)) });
+    }
+
+    const summary = {
+      trades: trades.length,
+      pnl: Number(eq.toFixed(2)),
+      winRate: trades.length ? Number((wins / trades.length * 100).toFixed(2)) : 0,
+      maxDrawdown: Number(maxDD.toFixed(2)),
+    };
+
+    const symbol = process.env.SYMBOL || 'BTCUSDT';
+
+    res.json({ ok: true, symbol, trades, equity, summary });
+  } catch (e) {
+    console.error('[/live/history] db error:', e);
+    res.status(500).json({ ok: false, error: 'db_error' });
+  }
+});
+
 // --- Analytics dashboard ---
 
 // Serve static analytics assets (CSV/HTML) from client/public
