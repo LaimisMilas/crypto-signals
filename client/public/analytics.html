@@ -25,7 +25,7 @@
   <h1>Analytics</h1>
   <div class="filters">
     <label>Symbol <input type="text" id="symbol" /></label>
-    <label>Strategy <input type="text" id="strategy" /></label>
+    <label>Strategy <select id="strategy"></select></label>
     <label>From <input type="date" id="from" /></label>
     <label>To <input type="date" id="to" /></label>
     <label>Params <input type="text" id="params" placeholder="k=v,k2=v2 or JSON" /></label>
@@ -142,6 +142,20 @@
     return params;
   }
 
+  async function loadStrategies() {
+    const sel = document.getElementById('strategy');
+    sel.innerHTML = '<option value="">All</option>';
+    try {
+      const arr = await fetch('/strategies').then(r => r.json());
+      arr.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.label || s.id;
+        sel.appendChild(opt);
+      });
+    } catch {}
+  }
+
   async function loadOptimize(url) {
     try {
       if (!url) throw new Error('no');
@@ -226,7 +240,7 @@
   }
 
   document.getElementById('apply').addEventListener('click', apply);
-  apply();
+  loadStrategies().then(apply);
 </script>
 </body>
 </html>
