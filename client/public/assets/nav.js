@@ -1,11 +1,13 @@
 (async function() {
-  async function inject(selector, url) {
+  async function inject(selector, url, replace = false) {
     const host = document.querySelector(selector);
     if (!host) return;
     const res = await fetch(url, { cache: 'no-cache' });
-    host.innerHTML = await res.text();
+    const html = await res.text();
+    if (replace) host.outerHTML = html; else host.innerHTML = html;
   }
   await inject('#app-nav', '/partials/nav.html');
+  await inject('#app-breadcrumbs', '/partials/breadcrumbs.html', true);
   await inject('#app-footer', '/partials/footer.html');
 
   const path = location.pathname.replace(/^\//,'').toLowerCase();

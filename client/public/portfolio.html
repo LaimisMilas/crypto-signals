@@ -1,97 +1,35 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
   <meta charset="utf-8" />
   <title>Portfolio</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="/assets/nav.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body { font-family: system-ui, sans-serif; margin:20px; color:#111; background:#fafafa; }
-    h1 { margin-bottom:8px; }
-    .filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:16px; }
-    input, select, button { padding:4px 6px; }
-    canvas { background:#fff; border:1px solid #ddd; border-radius:8px; padding:4px; }
-    .cards { display:flex; flex-wrap:wrap; gap:12px; }
-    .card { background:#fff; border:1px solid #ddd; border-radius:8px; padding:8px 12px; min-width:120px; }
-  </style>
+  <link rel="stylesheet" href="/assets/ui-breadcrumbs.css">
+  <link rel="stylesheet" href="/assets/ui-tabs.css">
 </head>
 <body>
   <div id="app-nav"></div>
-  <h1>Portfolio</h1>
-  <div class="filters">
-    <label>Symbol <input type="text" id="symbol" /></label>
-    <label>Strategy <input type="text" id="strategy" /></label>
-    <label>From <input type="date" id="from" /></label>
-    <label>To <input type="date" id="to" /></label>
-    <button id="apply">Apply</button>
-    <span id="status"></span>
-  </div>
-  <section>
-    <h2>Summary</h2>
-    <div class="cards">
-      <div class="card">Equity: <span id="sum-equity"></span></div>
-      <div class="card">Total PnL: <span id="sum-total"></span></div>
+  <div id="app-breadcrumbs"></div>
+
+  <main class="container">
+    <div class="tabs" data-tabs id="portfolio-tabs">
+      <div class="tablist" role="tablist" aria-label="Portfolio sections">
+        <button role="tab" id="tab-summary" data-tab="summary" aria-selected="true">Summary</button>
+        <button role="tab" id="tab-allocation" data-tab="allocation">Allocation</button>
+      </div>
+
+      <section role="tabpanel" id="panel-summary" data-tab-panel="summary" aria-labelledby="tab-summary">
+        <!-- summary -->
+      </section>
+      <section role="tabpanel" id="panel-allocation" data-tab-panel="allocation" aria-labelledby="tab-allocation" hidden>
+        <!-- allocation charts -->
+      </section>
     </div>
-  </section>
-  <section>
-    <h2>Allocation</h2>
-    <div style="display:flex;gap:20px;flex-wrap:wrap;">
-      <div><canvas id="alloc-strategy" width="180" height="180"></canvas></div>
-      <div><canvas id="alloc-symbol" width="180" height="180"></canvas></div>
-    </div>
-    <div id="alloc-empty" class="card"></div>
-  </section>
-  <pre id="debug" style="white-space:pre-wrap;"></pre>
-<script>
-  const chartOpts = {type:'doughnut', data:{labels:[],datasets:[{data:[],backgroundColor:[]}]}, options:{plugins:{legend:{position:'bottom'}}}};
-  const allocStrategy = new Chart(document.getElementById('alloc-strategy'), JSON.parse(JSON.stringify(chartOpts)));
-  const allocSymbol = new Chart(document.getElementById('alloc-symbol'), JSON.parse(JSON.stringify(chartOpts)));
+  </main>
 
-  function buildParams() {
-    const params = new URLSearchParams();
-    const sym = document.getElementById('symbol').value.trim();
-    const strat = document.getElementById('strategy').value.trim();
-    const from = document.getElementById('from').value;
-    const to = document.getElementById('to').value;
-    if (sym) params.set('symbol', sym);
-    if (strat) params.set('strategy', strat);
-    if (from) params.set('from', from);
-    if (to) params.set('to', to);
-    return params;
-  }
-
-  function renderDonut(chart, arr, labelKey) {
-    chart.data.labels = arr.map(x=>x[labelKey]);
-    chart.data.datasets[0].data = arr.map(x=>x.value);
-    const colors = ['#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f','#edc949','#af7aa1','#ff9da7','#9c755f','#bab0ab'];
-    chart.data.datasets[0].backgroundColor = arr.map((_,i)=>colors[i%colors.length]);
-    chart.update();
-  }
-
-  async function apply() {
-    const params = buildParams();
-    const status = document.getElementById('status');
-    status.textContent = 'Loading...';
-    try {
-      const data = await fetch('/portfolio?' + params.toString()).then(r=>r.json());
-      document.getElementById('sum-equity').textContent = data.summary?.equity?.toFixed?.(2) ?? '';
-      document.getElementById('sum-total').textContent = data.summary?.totalPnL?.toFixed?.(2) ?? '';
-      renderDonut(allocStrategy, data.allocation?.byStrategy || [], 'strategy');
-      renderDonut(allocSymbol, data.allocation?.bySymbol || [], 'symbol');
-      document.getElementById('alloc-empty').textContent = (data.allocation?.byStrategy?.length || data.allocation?.bySymbol?.length) ? '' : 'No data';
-      document.getElementById('debug').textContent = JSON.stringify(data, null, 2);
-      status.textContent = '';
-    } catch (e) {
-      console.error(e);
-      status.textContent = 'Failed to load';
-    }
-  }
-
-  document.getElementById('apply').addEventListener('click', apply);
-  apply();
-  </script>
   <div id="app-footer"></div>
   <script src="/assets/nav.js"></script>
+  <script src="/assets/ui-breadcrumbs.js"></script>
+  <script src="/assets/ui-tabs.js"></script>
 </body>
 </html>
