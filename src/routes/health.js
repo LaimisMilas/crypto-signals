@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import pkg from '../../package.json' assert { type: 'json' };
+import pkg from '../../package.json' with { type: 'json' }; // ← nauja sintaksė
 import { db } from '../storage/db.js';
 
 const router = Router();
