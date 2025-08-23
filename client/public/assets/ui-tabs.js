@@ -48,7 +48,7 @@
     });
 
     const desired = parseDesiredTab() || localStorage.getItem(storageKey) || tabs[0].dataset.tab;
-    activate(desired, false);
+    activate(desired, /*push*/false);
   }
 
   document.addEventListener('DOMContentLoaded', ()=>{

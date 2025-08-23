@@ -10,7 +10,7 @@
   function buildCrumbs() {
     const host = document.getElementById('app-breadcrumbs');
     if (!host) return;
-    const path = location.pathname.split('/').pop() || 'index.html';
+    const path = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
     const pageName = PAGE_NAMES[path] || document.title || 'Page';
     const tabLabel = document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim();
 
@@ -21,11 +21,12 @@
     ];
 
     host.innerHTML = parts.map((p,i)=>{
-      const isLast = i === parts.length-1;
-      const link = p.href && !isLast ? `<a href="${p.href}">${p.label}</a>` : `<span class="${isLast?'breadcrumbs__current':''}">${p.label}</span>`;
-      const sep = isLast ? '' : `<span class="breadcrumbs__sep">›</span>`;
+      const last = i === parts.length-1;
+      const link = p.href && !last ? `<a href="${p.href}">${p.label}</a>` : `<span class="${last?'breadcrumbs__current':''}">${p.label}</span>`;
+      const sep = last ? '' : `<span class="breadcrumbs__sep">›</span>`;
       return `${link}${sep}`;
     }).join('');
+
     if (tabLabel) document.title = `${tabLabel} — ${pageName} | Crypto Signals`;
   }
 
