@@ -1,4 +1,5 @@
 // Minimal live runner supporting multiple strategies
+process.env.TZ = process.env.TZ || 'Europe/Vilnius';
 import { db } from './storage/db.js';
 import { getStrategyById } from './strategies/index.js';
 import { cfg } from './config.js';
@@ -145,4 +146,27 @@ export async function runOnce(liveConfig) {
   } finally {
     client.release();
   }
+}
+
+let runnerState = { status: 'RUNNING', lastError: null };
+let activeConfig = null;
+
+export function getRunnerStatus() {
+  return runnerState;
+}
+
+export async function gracefulRestart(newCfg) {
+  runnerState.status = 'RESTARTING';
+  try {
+    // Placeholder for stopping ongoing loops / timers
+    activeConfig = newCfg;
+  } catch (e) {
+    runnerState.lastError = String(e);
+  } finally {
+    runnerState.status = 'RUNNING';
+  }
+}
+
+export function getActiveRunnerConfig() {
+  return activeConfig;
 }
