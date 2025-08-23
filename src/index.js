@@ -12,6 +12,7 @@ import { startLive, stopLive, resetLive, getLiveState, getLiveConfig, setLiveCon
 import { ingestOnce, getIngestHealth } from './ingest.js';
 import { equityRoutes } from './routes/equity.js';
 import { getStrategies } from './strategies/index.js';
+import binanceRoutes from './integrations/binance/routes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'client', 'public');
@@ -31,6 +32,7 @@ app.use(bodyParser.json());
 
 // Equity routes (SSE and fetch)
 equityRoutes(app);
+app.use('/binance', binanceRoutes);
 
 app.get('/strategies', (_req, res) => {
   res.json(getStrategies().map(s => ({ id: s.id, label: s.id.toUpperCase() })));

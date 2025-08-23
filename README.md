@@ -35,6 +35,16 @@ cp -r client/dist/* public/
 cp .env.example .env
 ```
 
+### Binance Futures Testnet
+To enable testnet account and order endpoints, set the following variables in `.env`:
+
+```
+BINANCE_BASE_URL=https://testnet.binancefuture.com
+BINANCE_API_KEY=your_key
+BINANCE_API_SECRET=your_secret
+BINANCE_RECV_WINDOW=5000
+```
+
 5) Init DB
 ```bash
 npm run initdb
