@@ -13,6 +13,7 @@ import { ingestOnce, getIngestHealth } from './ingest.js';
 import { equityRoutes } from './routes/equity.js';
 import { userStreamRoutes } from './routes/live.js';
 import { portfolioRoutes } from './routes/portfolio.js';
+import { riskRoutes } from './routes/risk.js';
 import { getStrategies } from './strategies/index.js';
 import binanceRoutes from './integrations/binance/routes.js';
 
@@ -36,6 +37,7 @@ app.use(bodyParser.json());
 equityRoutes(app);
 userStreamRoutes(app);
 portfolioRoutes(app);
+riskRoutes(app);
 app.use('/binance', binanceRoutes);
 
 app.get('/strategies', (_req, res) => {

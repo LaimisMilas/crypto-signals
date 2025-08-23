@@ -7,6 +7,15 @@
 </head>
 <body>
   <h1>Paper Trading</h1>
+  <section id="risk">
+    <h2>Risk</h2>
+    <div>Status: <span id="riskState">...</span>
+      <button id="riskHaltBtn">HALT</button>
+      <button id="riskResumeBtn">RESUME</button>
+    </div>
+    <div>Daily P/L: <progress id="dailyLossBar" value="0" max="100"></progress></div>
+    <ul id="riskLog"></ul>
+  </section>
   <section id="userStream">
     <h2>User Data Stream</h2>
     <div>Stream status: <span id="udsState">disconnected</span> <button id="udsReconnect">Reconnect</button></div>
@@ -402,6 +411,44 @@ setInterval(loadClosedTrades, 30000);
   btnConnect.addEventListener('click', connect);
   btnDisconnect.addEventListener('click', disconnect);
 
+})();
+  </script>
+  <script>
+(function() {
+  async function refresh() {
+    const r = await fetch('/risk/status').then(r=>r.json()).catch(()=>null);
+    if (!r) return;
+    document.getElementById('riskState').textContent = r.state?.state || 'unknown';
+    const eq = Number(r.state?.equity_day_start || 0);
+    const pnl = Number(r.state?.realized_pnl_today || 0);
+    const lossPct = eq ? (pnl / eq) * 100 : 0;
+    const bar = document.getElementById('dailyLossBar');
+    bar.max = r.config?.maxDailyLossPct || 100;
+    bar.value = Math.min(Math.abs(lossPct), bar.max);
+  }
+  async function loadLogs() {
+    const rows = await fetch('/risk/logs').then(r=>r.json()).catch(()=>[]);
+    const ul = document.getElementById('riskLog');
+    ul.innerHTML = '';
+    rows.slice(0,10).forEach(l => {
+      const li = document.createElement('li');
+      li.textContent = `${l.ts} ${l.action} ${l.reason||''}`;
+      ul.appendChild(li);
+    });
+  }
+  document.getElementById('riskHaltBtn').onclick = async () => {
+    await fetch('/risk/halt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    await refresh();
+    await loadLogs();
+  };
+  document.getElementById('riskResumeBtn').onclick = async () => {
+    await fetch('/risk/resume', { method: 'POST' });
+    await refresh();
+    await loadLogs();
+  };
+  refresh();
+  loadLogs();
+  setInterval(refresh, 10000);
 })();
   </script>
 </body>

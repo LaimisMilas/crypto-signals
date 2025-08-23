@@ -7,6 +7,8 @@ import { computeATR } from './risk/atr.js';
 import { computePositionSize } from './risk/sizing.js';
 import { loadExchangeFilters, roundPrice, ensureSymbolSettings } from './risk/limits.js';
 import { buildOrders } from './risk/orders.js';
+import { checkPreEntry } from './risk/guardrails.js';
+import { ensureDayStart, updateRealizedPnlToday } from './risk/state.js';
 
 async function selectRecentCandles(client, symbol, limit = 500) {
   const { rows } = await client.query(
@@ -49,6 +51,7 @@ async function closeTrade(client, { ts, price, strategyId, symbol }) {
        WHERE id=$4`,
     [price, ts, pnl, tr.id]
   );
+  await updateRealizedPnlToday(pnl);
 }
 
 export async function runOnce(liveConfig) {
@@ -79,6 +82,27 @@ export async function runOnce(liveConfig) {
           const account = await binance.send('GET', '/fapi/v2/account', {}, { signed: true });
           const equity = Number(account.totalWalletBalance);
           const available = Number(account.availableBalance);
+          await ensureDayStart(equity);
+          const openPositions = (account.positions || []).filter(p => Number(p.positionAmt));
+          const exposureBySymbol = {};
+          for (const p of openPositions) {
+            const notional = Math.abs(Number(p.notional));
+            const pct = equity ? (notional / equity) * 100 : 0;
+            exposureBySymbol[p.symbol] = pct;
+          }
+          const ctx = {
+            symbol,
+            side: side === 'BUY' ? 'LONG' : 'SHORT',
+            entry: entryPrice,
+            sl,
+            qty: 0,
+            notional: 0,
+            equityNow: equity,
+            openPositions,
+            exposureBySymbol,
+            atrVolPct: (atr / lastClose) * 100,
+            pingFailures: 0,
+          };
           await ensureSymbolSettings(symbol, { leverage: cfg.leverage, positionMode: cfg.positionMode });
           const { qty, reason } = computePositionSize({
             equity,
@@ -89,6 +113,17 @@ export async function runOnce(liveConfig) {
             leverage: cfg.leverage,
             symbolFilters: filters,
           });
+          ctx.qty = qty;
+          ctx.notional = entryPrice * qty;
+          const verdict = await checkPreEntry(ctx);
+          if (verdict.halt) {
+            console.log('Guardrails HALT', verdict.reason);
+            break;
+          }
+          if (verdict.fail) {
+            console.log('Trade skipped', verdict.reason);
+            continue;
+          }
           if (qty > 0) {
             const orders = buildOrders({ side, entryType: 'MARKET', entryPrice, qty, sl, tp, symbol });
             try {
