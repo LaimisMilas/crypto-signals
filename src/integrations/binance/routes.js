@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import binance from './client.js';
+import userData from './userDataService.js';
 
 const router = Router();
 
@@ -65,6 +66,39 @@ router.delete('/order', async (req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
+});
+
+// --- User data stream helpers (debug / dev) ---
+
+router.post('/user-data/start', async (_req, res) => {
+  try {
+    const listenKey = await userData.start();
+    res.json({ ok: true, listenKey });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
+router.post('/user-data/keepalive', async (_req, res) => {
+  try {
+    await userData.keepAlive();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
+router.post('/user-data/stop', async (_req, res) => {
+  try {
+    await userData.stop();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
+router.get('/user-data/status', (_req, res) => {
+  res.json({ ok: true, status: userData.status() });
 });
 
 export default router;

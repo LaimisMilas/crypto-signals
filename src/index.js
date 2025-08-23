@@ -11,6 +11,7 @@ import { createCheckoutSession, stripeWebhook } from './payments/stripe.js';
 import { startLive, stopLive, resetLive, getLiveState, getLiveConfig, setLiveConfig } from './live.js';
 import { ingestOnce, getIngestHealth } from './ingest.js';
 import { equityRoutes } from './routes/equity.js';
+import { userStreamRoutes } from './routes/live.js';
 import { getStrategies } from './strategies/index.js';
 import binanceRoutes from './integrations/binance/routes.js';
 
@@ -32,6 +33,7 @@ app.use(bodyParser.json());
 
 // Equity routes (SSE and fetch)
 equityRoutes(app);
+userStreamRoutes(app);
 app.use('/binance', binanceRoutes);
 
 app.get('/strategies', (_req, res) => {

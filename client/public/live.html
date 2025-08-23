@@ -7,6 +7,19 @@
 </head>
 <body>
   <h1>Paper Trading</h1>
+  <section id="userStream">
+    <h2>User Data Stream</h2>
+    <div>Stream status: <span id="udsState">disconnected</span> <button id="udsReconnect">Reconnect</button></div>
+    <h3>Orders</h3>
+    <table border="1" id="udsOrders">
+      <thead><tr><th>Time</th><th>Symbol</th><th>Side</th><th>Status</th><th>LastQty</th><th>LastPrice</th><th>CumQty</th><th>AvgPrice</th><th>RealizedPnL</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <h3>Account</h3>
+    <pre id="udsAccount"></pre>
+    <h3>Positions</h3>
+    <pre id="udsPositions"></pre>
+  </section>
   <section id="binance">
     <h2>Binance Testnet</h2>
     <button id="pingBtn">Ping</button> <span id="pingRes"></span>
@@ -237,6 +250,48 @@ async function loadStrategyOptions() {
 
 loadStrategyOptions().then(loadClosedTrades);
 setInterval(loadClosedTrades, 30000);
+  </script>
+  <script>
+  (function() {
+    const stateEl = document.getElementById('udsState');
+    const btn = document.getElementById('udsReconnect');
+    const ordersBody = document.querySelector('#udsOrders tbody');
+    const accEl = document.getElementById('udsAccount');
+    const posEl = document.getElementById('udsPositions');
+    let es;
+
+    function connect() {
+      stateEl.textContent = 'connecting';
+      es = new EventSource('/live/user-stream');
+      es.onmessage = (ev) => {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'init') {
+          if (msg.account) {
+            accEl.textContent = JSON.stringify({ wallet: msg.account.totalWalletBalance, available: msg.account.availableBalance }, null, 2);
+          }
+          if (msg.positions) posEl.textContent = JSON.stringify(msg.positions, null, 2);
+        } else if (msg.type === 'order') {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${new Date(msg.T).toLocaleTimeString()}</td><td>${msg.s}</td><td>${msg.S}</td><td>${msg.X}</td><td>${msg.l}</td><td>${msg.L}</td><td>${msg.z}</td><td>${msg.ap}</td><td>${msg.rp}</td>`;
+          ordersBody.prepend(tr);
+          while (ordersBody.children.length > 20) ordersBody.removeChild(ordersBody.lastChild);
+        } else if (msg.type === 'account') {
+          accEl.textContent = JSON.stringify(msg.balances || [], null, 2);
+          posEl.textContent = JSON.stringify(msg.positions || [], null, 2);
+        } else if (msg.type === 'status') {
+          stateEl.textContent = msg.state;
+        }
+      };
+      es.onerror = () => { stateEl.textContent = 'reconnecting'; };
+    }
+
+    btn.addEventListener('click', () => {
+      if (es) es.close();
+      connect();
+    });
+
+    connect();
+  })();
   </script>
 
   <script>
