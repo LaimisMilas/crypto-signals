@@ -16,6 +16,7 @@ import { portfolioRoutes } from './routes/portfolio.js';
 import { riskRoutes } from './routes/risk.js';
 import { getStrategies } from './strategies/index.js';
 import { configRoutes } from './routes/config.js';
+import { jobsRoutes } from './routes/jobs.js';
 import binanceRoutes from './integrations/binance/routes.js';
 import healthRoutes from './routes/health.js';
 
@@ -41,6 +42,7 @@ userStreamRoutes(app);
 portfolioRoutes(app);
 riskRoutes(app);
 configRoutes(app);
+jobsRoutes(app);
 app.use('/binance', binanceRoutes);
 app.use('/', healthRoutes);
 
@@ -513,3 +515,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on :${PORT}`);
 });
+
+if (process.env.ENABLE_JOB_WORKER === 'true') {
+  import('./jobs/worker.js').then(m => m.startWorker());
+}
