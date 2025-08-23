@@ -12,6 +12,7 @@ import { startLive, stopLive, resetLive, getLiveState, getLiveConfig, setLiveCon
 import { ingestOnce, getIngestHealth } from './ingest.js';
 import { equityRoutes } from './routes/equity.js';
 import { userStreamRoutes } from './routes/live.js';
+import { portfolioRoutes } from './routes/portfolio.js';
 import { getStrategies } from './strategies/index.js';
 import binanceRoutes from './integrations/binance/routes.js';
 
@@ -34,6 +35,7 @@ app.use(bodyParser.json());
 // Equity routes (SSE and fetch)
 equityRoutes(app);
 userStreamRoutes(app);
+portfolioRoutes(app);
 app.use('/binance', binanceRoutes);
 
 app.get('/strategies', (_req, res) => {
@@ -282,6 +284,11 @@ app.get('/live/history', async (req, res) => {
 // Serve static analytics dashboard
 app.get('/analytics.html', (_req, res) => {
   res.sendFile(path.join(publicDir, 'analytics.html'));
+});
+
+// Portfolio dashboard
+app.get('/portfolio.html', (_req, res) => {
+  res.sendFile(path.join(publicDir, 'portfolio.html'));
 });
 
 // Analytics API
