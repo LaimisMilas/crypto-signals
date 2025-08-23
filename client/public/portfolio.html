@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <title>Portfolio</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/assets/nav.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { font-family: system-ui, sans-serif; margin:20px; color:#111; background:#fafafa; }
@@ -16,6 +17,7 @@
   </style>
 </head>
 <body>
+  <div id="app-nav"></div>
   <h1>Portfolio</h1>
   <div class="filters">
     <label>Symbol <input type="text" id="symbol" /></label>
@@ -88,6 +90,8 @@
 
   document.getElementById('apply').addEventListener('click', apply);
   apply();
-</script>
+  </script>
+  <div id="app-footer"></div>
+  <script src="/assets/nav.js"></script>
 </body>
 </html>

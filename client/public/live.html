@@ -3,9 +3,11 @@
 <head>
   <meta charset="utf-8">
   <title>Paper Trading Live</title>
+  <link rel="stylesheet" href="/assets/nav.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+  <div id="app-nav"></div>
   <h1>Paper Trading</h1>
   <section id="risk">
     <h2>Risk</h2>
@@ -302,6 +304,7 @@ setInterval(loadClosedTrades, 30000);
     connect();
   })();
   </script>
+  </script>
 
   <script>
 (function() {
@@ -451,5 +454,7 @@ setInterval(loadClosedTrades, 30000);
   setInterval(refresh, 10000);
 })();
   </script>
+  <div id="app-footer"></div>
+  <script src="/assets/nav.js"></script>
 </body>
 </html>

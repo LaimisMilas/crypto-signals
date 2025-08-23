@@ -3,8 +3,10 @@
 <head>
   <meta charset="utf-8">
   <title>Strategy Settings</title>
+  <link rel="stylesheet" href="/assets/nav.css">
 </head>
 <body>
+  <div id="app-nav"></div>
   <h1>Strategy Settings</h1>
   <div>Runner status: <span id="runnerStatus">...</span></div>
   <div id="strategies"></div>
@@ -148,6 +150,8 @@ document.getElementById('savePresetForm').onsubmit = async (e) => {
 };
 
 load();
-</script>
+  </script>
+  <div id="app-footer"></div>
+  <script src="/assets/nav.js"></script>
 </body>
 </html>
