@@ -1,0 +1,88 @@
+name: Deploy Dev
+on:
+  push:
+    branches: [ "develop" ]
+  workflow_dispatch: {}
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION:     ${{ secrets.GCP_REGION }}
+  SERVICE_NAME:   ${{ secrets.CLOUD_RUN_SERVICE_DEV }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Install
+        run: npm ci
+
+      - name: Google Auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Configure Docker Auth
+        run: gcloud auth configure-docker europe-docker.pkg.dev -q
+
+      - name: Build & Push Image
+        run: |
+          IMAGE="europe-docker.pkg.dev/${GCP_PROJECT_ID}/containers/${SERVICE_NAME}:${GITHUB_SHA}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Deploy (no traffic)
+        run: |
+          gcloud run deploy "${SERVICE_NAME}" \
+            --image="${IMAGE}" \
+            --region="${GCP_REGION}" \
+            --allow-unauthenticated \
+            --set-env-vars="NODE_ENV=production" \
+            --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL_DEV }}" \
+            --set-env-vars="BINANCE_BASE_URL=https://testnet.binancefuture.com" \
+            --set-env-vars="BINANCE_API_KEY=${{ secrets.BINANCE_API_KEY_DEV }}" \
+            --set-env-vars="BINANCE_API_SECRET=${{ secrets.BINANCE_API_SECRET_DEV }}" \
+            --set-env-vars="GIT_COMMIT=${GITHUB_SHA}" \
+            --no-traffic
+
+      - name: Get latest revision URL
+        id: rev
+        run: |
+          REV=$(gcloud run revisions list --service="${SERVICE_NAME}" --region="${GCP_REGION}" --format="value(name)" --sort-by="~createTime" | head -n1)
+          URL=$(gcloud run revisions describe "$REV" --region="${GCP_REGION}" --format="value(status.address.url)")
+          echo "REV=$REV" >> $GITHUB_OUTPUT
+          echo "URL=$URL" >> $GITHUB_OUTPUT
+
+      - name: DB Migrations (against DEV)
+        run: |
+          npm run migrate
+
+      - name: Smoke tests (hit revision URL)
+        run: |
+          set -e
+          URL=${{ steps.rev.outputs.URL }}
+          echo "Testing $URL"
+          curl -fsS "$URL/healthz"
+          curl -fsS "$URL/readyz"
+          curl -fsS "$URL/analytics?limit=1" || true
+          curl -fsS "$URL/binance/ping"    || true
+          curl -fsS "$URL/portfolio"       || true
+
+      - name: Promote to 100% traffic
+        run: |
+          REV=${{ steps.rev.outputs.REV }}
+          gcloud run services update-traffic "${SERVICE_NAME}" --region="${GCP_REGION}" --to-revisions="${REV}=100"

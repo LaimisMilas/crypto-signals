@@ -17,6 +17,7 @@ import { riskRoutes } from './routes/risk.js';
 import { getStrategies } from './strategies/index.js';
 import { configRoutes } from './routes/config.js';
 import binanceRoutes from './integrations/binance/routes.js';
+import healthRoutes from './routes/health.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'client', 'public');
@@ -41,6 +42,7 @@ portfolioRoutes(app);
 riskRoutes(app);
 configRoutes(app);
 app.use('/binance', binanceRoutes);
+app.use('/', healthRoutes);
 
 app.get('/strategies', (_req, res) => {
   res.json(getStrategies().map(s => ({ id: s.id, label: s.id.toUpperCase() })));
@@ -108,21 +110,6 @@ app.post('/ingest', async (req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
-});
-
-app.get('/version', async (_req, res) => {
-  res.set('Cache-Control', 'no-store');
-  let pkg = { name: 'crypto-signals', version: '0.0.0' };
-  try {
-    const text = await fs.readFile(path.join(__dirname, '..', 'package.json'), 'utf-8');
-    pkg = JSON.parse(text);
-  } catch {}
-  res.json({
-    name: pkg.name,
-    version: pkg.version,
-    git: process.env.GIT_SHA || null,
-    builtAt: process.env.BUILD_TIME || null,
-  });
 });
 
 app.get('/download/:file', async (req, res) => {
