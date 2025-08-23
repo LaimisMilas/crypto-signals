@@ -15,6 +15,7 @@ import { userStreamRoutes } from './routes/live.js';
 import { portfolioRoutes } from './routes/portfolio.js';
 import { riskRoutes } from './routes/risk.js';
 import { getStrategies } from './strategies/index.js';
+import { configRoutes } from './routes/config.js';
 import binanceRoutes from './integrations/binance/routes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -38,6 +39,7 @@ equityRoutes(app);
 userStreamRoutes(app);
 portfolioRoutes(app);
 riskRoutes(app);
+configRoutes(app);
 app.use('/binance', binanceRoutes);
 
 app.get('/strategies', (_req, res) => {
