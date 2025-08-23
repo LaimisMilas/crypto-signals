@@ -1,6 +1,12 @@
 // Minimal live runner supporting multiple strategies
 import { db } from './storage/db.js';
 import { getStrategyById } from './strategies/index.js';
+import { cfg } from './config.js';
+import binance from './integrations/binance/client.js';
+import { computeATR } from './risk/atr.js';
+import { computePositionSize } from './risk/sizing.js';
+import { loadExchangeFilters, roundPrice, ensureSymbolSettings } from './risk/limits.js';
+import { buildOrders } from './risk/orders.js';
 
 async function selectRecentCandles(client, symbol, limit = 500) {
   const { rows } = await client.query(
@@ -51,6 +57,9 @@ export async function runOnce(liveConfig) {
   try {
     for (const symbol of symbols) {
       const candles = await selectRecentCandles(client, symbol, 500);
+      const { atr } = computeATR(candles, cfg.atrPeriod);
+      const lastClose = candles[candles.length - 1]?.close;
+      if (!Number.isFinite(atr) || !Number.isFinite(lastClose)) continue;
       for (const sCfg of strategies) {
         const strat = getStrategyById(sCfg.id);
         if (!strat) continue;
@@ -58,10 +67,43 @@ export async function runOnce(liveConfig) {
         const { trades } = strat.generateSignals(candles, params);
         const last = trades[trades.length - 1];
         if (!last) continue;
-        if (last.side === 'BUY') {
-          await openTrade(client, { ts: last.ts, side: 'BUY', price: last.price, strategyId: strat.id, params, symbol });
-        } else if (last.side === 'SELL') {
-          await closeTrade(client, { ts: last.ts, price: last.price, strategyId: strat.id, symbol });
+        if (last.side === 'BUY' || last.side === 'SELL') {
+          const side = last.side;
+          const entry = last.price || lastClose;
+          const slRaw = side === 'BUY' ? entry - cfg.slAtrMult * atr : entry + cfg.slAtrMult * atr;
+          const tpRaw = side === 'BUY' ? entry + cfg.tpAtrMult * atr : entry - cfg.tpAtrMult * atr;
+          const filters = await loadExchangeFilters(symbol);
+          const entryPrice = roundPrice(entry, filters.tickSize);
+          const sl = roundPrice(slRaw, filters.tickSize);
+          const tp = roundPrice(tpRaw, filters.tickSize);
+          const account = await binance.send('GET', '/fapi/v2/account', {}, { signed: true });
+          const equity = Number(account.totalWalletBalance);
+          const available = Number(account.availableBalance);
+          await ensureSymbolSettings(symbol, { leverage: cfg.leverage, positionMode: cfg.positionMode });
+          const { qty, reason } = computePositionSize({
+            equity,
+            availableBalance: available,
+            entry: entryPrice,
+            stop: sl,
+            riskPct: cfg.riskPerTradePct,
+            leverage: cfg.leverage,
+            symbolFilters: filters,
+          });
+          if (qty > 0) {
+            const orders = buildOrders({ side, entryType: 'MARKET', entryPrice, qty, sl, tp, symbol });
+            try {
+              // entry first
+              await binance.send('POST', '/fapi/v1/order', orders[0], { signed: true });
+              // protective orders
+              await binance.send('POST', '/fapi/v1/order', orders[1], { signed: true });
+              await binance.send('POST', '/fapi/v1/order', orders[2], { signed: true });
+              await openTrade(client, { ts: last.ts, side, price: entryPrice, strategyId: strat.id, params, symbol });
+            } catch (e) {
+              console.error('Order error', e);
+            }
+          } else {
+            console.log('Trade skipped', reason);
+          }
         }
       }
     }
