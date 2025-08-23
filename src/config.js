@@ -13,4 +13,10 @@ export const cfg = {
   stripePriceId: process.env.STRIPE_PRICE_ID,
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
   dbUrl: process.env.DATABASE_URL,
+  riskPerTradePct: Number(process.env.RISK_PER_TRADE_PCT) || 1.0,
+  atrPeriod: Number(process.env.ATR_PERIOD) || 14,
+  slAtrMult: Number(process.env.SL_ATR_MULT) || 2.0,
+  tpAtrMult: Number(process.env.TP_ATR_MULT) || 3.0,
+  leverage: Number(process.env.LEVERAGE) || 5,
+  positionMode: process.env.POSITION_MODE || 'ONE_WAY',
 };
