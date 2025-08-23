@@ -1,250 +1,43 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8" />
+  <meta charset="utf-8">
   <title>Analytics</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="/assets/nav.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body { font-family: system-ui, sans-serif; margin:20px; color:#111; background:#fafafa; }
-    h1 { margin-bottom: 8px; }
-    section { margin-top: 24px; }
-    table { border-collapse: collapse; width:100%; background:#fff; }
-    th, td { border-bottom:1px solid #ddd; padding:4px 6px; text-align:right; }
-    th:first-child, td:first-child { text-align:left; }
-    .filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:16px; }
-    input, select, button, a.btn { padding:4px 6px; }
-    a.btn { border:1px solid #ccc; border-radius:4px; background:#fff; text-decoration:none; color:#111; }
-    canvas { background:#fff; border:1px solid #ddd; border-radius:8px; padding:4px; }
-    .muted { color:#666; font-size:12px; }
-    #stats { display:flex; flex-wrap:wrap; gap:12px; background:#fff; padding:8px; border:1px solid #ddd; border-radius:8px; }
-    #stats div { min-width:120px; }
-  </style>
+  <link rel="stylesheet" href="/assets/ui-breadcrumbs.css">
+  <link rel="stylesheet" href="/assets/ui-tabs.css">
 </head>
 <body>
   <div id="app-nav"></div>
-  <h1>Analytics</h1>
-  <div class="filters">
-    <label>Symbol <input type="text" id="symbol" /></label>
-    <label>Strategy <select id="strategy"></select></label>
-    <label>From <input type="date" id="from" /></label>
-    <label>To <input type="date" id="to" /></label>
-    <label>Params <input type="text" id="params" placeholder="k=v,k2=v2 or JSON" /></label>
-    <button id="apply">Apply</button>
-    <span id="status" class="muted"></span>
-    <a id="downloadTrades" class="btn" href="#" download>Trades CSV</a>
-    <a id="downloadBacktest" class="btn" href="#" download>Backtest CSV</a>
-    <a id="downloadOptimize" class="btn" href="#" download>Optimize CSV</a>
-    <a id="downloadWalkforward" class="btn" href="#" download>Walkforward CSV</a>
-  </div>
+  <div id="app-breadcrumbs"></div>
 
-  <section>
-    <h2>Equity</h2>
-    <canvas id="equityChart" height="160"></canvas>
-    <div id="equityEmpty" class="muted"></div>
-  </section>
+  <main class="container">
+    <div class="tabs" data-tabs id="analytics-tabs">
+      <div class="tablist" role="tablist" aria-label="Analytics sections">
+        <button role="tab" id="tab-overview" data-tab="overview" aria-selected="true">Overview</button>
+        <button role="tab" id="tab-pva"      data-tab="pva">Plan vs Actual</button>
+        <button role="tab" id="tab-trades"   data-tab="trades">Trades</button>
+        <button role="tab" id="tab-csv"      data-tab="csv">CSV</button>
+      </div>
 
-  <section>
-    <h2>Stats</h2>
-    <div id="stats">
-      <div>Total Trades: <span id="stat-totalTrades"></span></div>
-      <div>Win Rate: <span id="stat-winRate"></span></div>
-      <div>Avg PnL: <span id="stat-avgPnL"></span></div>
-      <div>Avg PnL %: <span id="stat-avgPnLPct"></span></div>
-      <div>Profit Factor: <span id="stat-profitFactor"></span></div>
-      <div>Max Drawdown: <span id="stat-maxDrawdown"></span></div>
-      <div>Sharpe: <span id="stat-sharpe"></span></div>
-      <div>Sortino: <span id="stat-sortino"></span></div>
-      <div>CAGR: <span id="stat-cagr"></span></div>
+      <section role="tabpanel" id="panel-overview" data-tab-panel="overview" aria-labelledby="tab-overview">
+        <!-- summary kortelės + equity -->
+      </section>
+      <section role="tabpanel" id="panel-pva" data-tab-panel="pva" aria-labelledby="tab-pva" hidden>
+        <!-- Plan vs Actual sekcija -->
+      </section>
+      <section role="tabpanel" id="panel-trades" data-tab-panel="trades" aria-labelledby="tab-trades" hidden>
+        <!-- trades lentelė -->
+      </section>
+      <section role="tabpanel" id="panel-csv" data-tab-panel="csv" aria-labelledby="tab-csv" hidden>
+        <!-- CSV nuorodos -->
+      </section>
     </div>
-  </section>
+  </main>
 
-  <section>
-    <h2>Closed Trades</h2>
-    <div style="overflow:auto; margin-top:8px;">
-      <table id="tradeTable">
-        <thead><tr><th>Closed</th><th>Symbol</th><th>Strategy</th><th>Side</th><th>Qty</th><th>Entry</th><th>Exit</th><th>PnL</th><th>PnL %</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div id="tradeEmpty" class="muted"></div>
-  </section>
-
-  <section>
-    <h2>Optimize top 20</h2>
-    <div style="overflow:auto;">
-      <table id="optTable">
-        <thead></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div id="optEmpty" class="muted"></div>
-  </section>
-
-  <section>
-    <h2>Walkforward</h2>
-    <div style="overflow:auto;">
-      <table id="walkTable">
-        <thead></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div id="walkEmpty" class="muted"></div>
-  </section>
-
-<script>
-  function parseCsv(text) {
-    const lines = text.trim().split(/\r?\n/);
-    if (!lines.length) return [];
-    const headers = lines[0].split(',');
-    return lines.slice(1).map(line => {
-      const parts = line.split(',');
-      const obj = {};
-      headers.forEach((h, i) => {
-        const v = parts[i];
-        const n = Number(v);
-        obj[h] = Number.isFinite(n) ? n : v;
-      });
-      return obj;
-    });
-  }
-
-  function renderTable(tbl, rows) {
-    const thead = tbl.querySelector('thead');
-    const tbody = tbl.querySelector('tbody');
-    if (!rows.length) { thead.innerHTML=''; tbody.innerHTML=''; return; }
-    const headers = Object.keys(rows[0]);
-    thead.innerHTML = '<tr>' + headers.map(h=>`<th>${h}</th>`).join('') + '</tr>';
-    tbody.innerHTML = rows.map(r => '<tr>' + headers.map(h=>`<td>${r[h]}</td>`).join('') + '</tr>').join('');
-  }
-
-  let equityChart = new Chart(document.getElementById('equityChart'), {
-    type:'line',
-    data:{ datasets:[] },
-    options:{
-      responsive:true,
-      parsing:false,
-      scales:{ x:{ type:'linear', ticks:{ maxTicksLimit:6, callback:v=>new Date(v).toLocaleDateString() } } }
-    }
-  });
-
-  function buildParams() {
-    const params = new URLSearchParams();
-    const sym = document.getElementById('symbol').value.trim();
-    const strat = document.getElementById('strategy').value.trim();
-    const from = document.getElementById('from').value;
-    const to = document.getElementById('to').value;
-    const p = document.getElementById('params').value.trim();
-    if (sym) params.set('symbol', sym);
-    if (strat) params.set('strategy', strat);
-    if (from) params.set('from', from);
-    if (to) params.set('to', to);
-    if (p) params.set('params', p);
-    return params;
-  }
-
-  async function loadStrategies() {
-    const sel = document.getElementById('strategy');
-    sel.innerHTML = '<option value="">All</option>';
-    try {
-      const arr = await fetch('/strategies').then(r => r.json());
-      arr.forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = s.label || s.id;
-        sel.appendChild(opt);
-      });
-    } catch {}
-  }
-
-  async function loadOptimize(url) {
-    try {
-      if (!url) throw new Error('no');
-      const rows = parseCsv(await fetch(url).then(r=>r.ok?r.text():'')).slice(0,20);
-      if (!rows.length) throw new Error('no');
-      renderTable(document.getElementById('optTable'), rows);
-      document.getElementById('optEmpty').textContent = '';
-    } catch {
-      document.getElementById('optEmpty').textContent = 'No data';
-      renderTable(document.getElementById('optTable'), []);
-    }
-  }
-
-  async function loadWalkforward(url) {
-    try {
-      if (!url) throw new Error('no');
-      const rows = parseCsv(await fetch(url).then(r=>r.ok?r.text():'')).slice(0,100);
-      if (!rows.length) throw new Error('no');
-      renderTable(document.getElementById('walkTable'), rows);
-      document.getElementById('walkEmpty').textContent = '';
-    } catch {
-      document.getElementById('walkEmpty').textContent = 'No data';
-      renderTable(document.getElementById('walkTable'), []);
-    }
-  }
-
-  async function apply() {
-    const params = buildParams();
-    const status = document.getElementById('status');
-    const btn = document.getElementById('apply');
-    status.textContent = 'Loading...';
-    btn.disabled = true;
-    try {
-      const data = await fetch('/analytics?' + params.toString()).then(r=>r.json());
-      const eqData = (data.equity||[]).map(p=>({x:p.ts,y:p.equity}));
-      equityChart.data.datasets = [{ label:'Equity', data:eqData, tension:0.2, pointRadius:0 }];
-      equityChart.update();
-      document.getElementById('equityEmpty').textContent = eqData.length ? '' : 'No data for selected filters';
-
-      const tblRows = (data.closedTrades||[]).map(t=>({
-        closed_at: new Date(t.closed_at).toLocaleString(),
-        symbol: t.symbol,
-        strategy: t.strategy,
-        side: t.side,
-        qty: t.qty,
-        entry_price: t.entry_price,
-        exit_price: t.exit_price,
-        pnl: t.pnl,
-        pnl_pct: t.pnl_pct,
-      }));
-      renderTable(document.getElementById('tradeTable'), tblRows);
-      document.getElementById('tradeEmpty').textContent = tblRows.length ? '' : 'No closed trades';
-
-      const s = data.stats || {};
-      const fmtPct = v => v==null? '': (v*100).toFixed(2)+'%';
-      const fmt = v => v==null? '': Number(v).toFixed(2);
-      document.getElementById('stat-totalTrades').textContent = s.totalTrades ?? 0;
-      document.getElementById('stat-winRate').textContent = fmtPct(s.winRate);
-      document.getElementById('stat-avgPnL').textContent = fmt(s.avgPnL);
-      document.getElementById('stat-avgPnLPct').textContent = fmtPct(s.avgPnLPct);
-      document.getElementById('stat-profitFactor').textContent = fmt(s.profitFactor);
-      document.getElementById('stat-maxDrawdown').textContent = fmtPct(s.maxDrawdown);
-      document.getElementById('stat-sharpe').textContent = fmt(s.sharpe);
-      document.getElementById('stat-sortino').textContent = fmt(s.sortino);
-      document.getElementById('stat-cagr').textContent = fmtPct(s.cagr);
-
-      const q = params.toString();
-      document.getElementById('downloadTrades').href = '/analytics/trades.csv' + (q?'?'+q:'');
-      document.getElementById('downloadBacktest').href = data.csv?.backtest || '#';
-      document.getElementById('downloadOptimize').href = data.csv?.optimize || '#';
-      document.getElementById('downloadWalkforward').href = data.csv?.walkforward || '#';
-
-      loadOptimize(data.csv?.optimize);
-      loadWalkforward(data.csv?.walkforward);
-      status.textContent = '';
-    } catch (e) {
-      console.error(e);
-      status.textContent = 'Failed to load analytics';
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  document.getElementById('apply').addEventListener('click', apply);
-  loadStrategies().then(apply);
-  </script>
   <div id="app-footer"></div>
   <script src="/assets/nav.js"></script>
+  <script src="/assets/ui-breadcrumbs.js"></script>
+  <script src="/assets/ui-tabs.js"></script>
 </body>
 </html>

@@ -1,0 +1,6 @@
+.breadcrumbs{display:flex;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid #222;background:#0f1115;position:sticky;top:48px;z-index:90}
+.breadcrumbs a{color:#9aa0a6;text-decoration:none}
+.breadcrumbs a:hover{color:#fff}
+.breadcrumbs__sep{opacity:.5}
+.breadcrumbs__current{color:#e6e6e6}
+@media (max-width:768px){.breadcrumbs{top:56px;flex-wrap:wrap}}

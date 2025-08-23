@@ -2,156 +2,34 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Strategy Settings</title>
+  <title>Settings</title>
   <link rel="stylesheet" href="/assets/nav.css">
+  <link rel="stylesheet" href="/assets/ui-breadcrumbs.css">
+  <link rel="stylesheet" href="/assets/ui-tabs.css">
 </head>
 <body>
   <div id="app-nav"></div>
-  <h1>Strategy Settings</h1>
-  <div>Runner status: <span id="runnerStatus">...</span></div>
-  <div id="strategies"></div>
-  <button id="addStrategy">Add Strategy</button>
-  <button id="saveBtn">Save</button>
-  <button id="applyBtn">Apply & Restart</button>
+  <div id="app-breadcrumbs"></div>
 
-  <section>
-    <h2>Presets</h2>
-    <form id="savePresetForm">
-      <input id="presetName" placeholder="Preset name">
-      <button type="submit">Save current</button>
-    </form>
-    <ul id="presetList"></ul>
-  </section>
+  <main class="container">
+    <div class="tabs" data-tabs id="settings-tabs">
+      <div class="tablist" role="tablist" aria-label="Settings sections">
+        <button role="tab" id="tab-strategies" data-tab="strategies" aria-selected="true">Strategies</button>
+        <button role="tab" id="tab-presets" data-tab="presets">Presets</button>
+      </div>
 
-<script>
-let data = { active:{strategies:[]}, available:[], schemas:{}, presets:[], runner:{} };
+      <section role="tabpanel" id="panel-strategies" data-tab-panel="strategies" aria-labelledby="tab-strategies">
+        <!-- strategy settings form -->
+      </section>
+      <section role="tabpanel" id="panel-presets" data-tab-panel="presets" aria-labelledby="tab-presets" hidden>
+        <!-- presets list/form -->
+      </section>
+    </div>
+  </main>
 
-async function load() {
-  const res = await fetch('/config/strategies').then(r=>r.json());
-  data.active = res.active || {strategies:[]};
-  data.available = res.available || [];
-  data.schemas = res.schemas || {};
-  data.presets = res.presets || [];
-  data.runner = res.runner || {};
-  render();
-  renderPresets();
-}
-
-function render() {
-  document.getElementById('runnerStatus').textContent = data.runner.status || 'unknown';
-  const container = document.getElementById('strategies');
-  container.innerHTML = '';
-  data.active.strategies.forEach((s, idx) => {
-    const div = document.createElement('div');
-    div.style.border = '1px solid #ccc';
-    div.style.margin = '4px';
-    div.style.padding = '4px';
-
-    const sel = document.createElement('select');
-    data.available.forEach(a => {
-      const opt = document.createElement('option');
-      opt.value = a.id; opt.textContent = a.id;
-      if (a.id === s.id) opt.selected = true;
-      sel.appendChild(opt);
-    });
-    sel.onchange = () => {
-      s.id = sel.value;
-      const def = data.available.find(a => a.id === s.id);
-      s.params = { ...def.defaultParams };
-      render();
-    };
-    div.appendChild(sel);
-
-    const schema = data.schemas[s.id] || { properties:{} };
-    const paramsDiv = document.createElement('div');
-    for (const [p, spec] of Object.entries(schema.properties)) {
-      const label = document.createElement('label');
-      label.textContent = p + ': ';
-      const inp = document.createElement('input');
-      inp.type = 'number';
-      if (spec.type === 'integer') inp.step = '1'; else inp.step = '0.0001';
-      if (spec.minimum != null) inp.min = spec.minimum;
-      if (spec.maximum != null) inp.max = spec.maximum;
-      inp.value = s.params?.[p] ?? '';
-      inp.onchange = () => { s.params[p] = Number(inp.value); };
-      label.appendChild(inp);
-      paramsDiv.appendChild(label);
-    }
-    div.appendChild(paramsDiv);
-
-    const sym = document.createElement('input');
-    sym.placeholder = 'Symbols (comma separated)';
-    sym.value = (s.symbols || []).join(',');
-    sym.onchange = () => { s.symbols = sym.value.split(',').map(v => v.trim()).filter(Boolean); };
-    div.appendChild(sym);
-
-    const rm = document.createElement('button');
-    rm.textContent = 'Remove';
-    rm.onclick = () => { data.active.strategies.splice(idx,1); render(); };
-    div.appendChild(rm);
-
-    container.appendChild(div);
-  });
-}
-
-document.getElementById('addStrategy').onclick = () => {
-  const first = data.available[0];
-  if (!first) return;
-  data.active.strategies.push({ id:first.id, params:{...first.defaultParams}, symbols:[] });
-  render();
-};
-
-document.getElementById('saveBtn').onclick = async () => {
-  const body = { strategies: data.active.strategies };
-  const r = await fetch('/config/strategies', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) }).then(r=>r.json());
-  alert(r.ok ? 'Saved' : 'Error: ' + JSON.stringify(r.errors));
-};
-
-document.getElementById('applyBtn').onclick = async () => {
-  const body = { strategies: data.active.strategies };
-  const r = await fetch('/config/strategies/apply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) }).then(r=>r.json());
-  data.runner = r.runner || data.runner;
-  alert(r.ok ? 'Applied' : 'Error: ' + JSON.stringify(r.errors));
-  render();
-};
-
-function renderPresets() {
-  const ul = document.getElementById('presetList');
-  ul.innerHTML='';
-  data.presets.forEach(p => {
-    const li = document.createElement('li');
-    li.textContent = p.name + ' (' + p.strategy_id + ')';
-    const loadBtn = document.createElement('button');
-    loadBtn.textContent = 'Load';
-    loadBtn.onclick = () => {
-      data.active.strategies = [{ id:p.strategy_id, params:p.params, symbols:p.symbols }];
-      render();
-    };
-    li.appendChild(loadBtn);
-    const delBtn = document.createElement('button');
-    delBtn.textContent = 'Delete';
-    delBtn.onclick = async () => {
-      await fetch('/config/presets/' + p.id, { method:'DELETE' });
-      await load();
-    };
-    li.appendChild(delBtn);
-    ul.appendChild(li);
-  });
-}
-
-document.getElementById('savePresetForm').onsubmit = async (e) => {
-  e.preventDefault();
-  const name = document.getElementById('presetName').value.trim();
-  const s = data.active.strategies[0];
-  if (!name || !s) return;
-  await fetch('/config/presets', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, strategy_id: s.id, params: s.params, symbols: s.symbols }) });
-  document.getElementById('presetName').value = '';
-  await load();
-};
-
-load();
-  </script>
   <div id="app-footer"></div>
   <script src="/assets/nav.js"></script>
+  <script src="/assets/ui-breadcrumbs.js"></script>
+  <script src="/assets/ui-tabs.js"></script>
 </body>
 </html>
