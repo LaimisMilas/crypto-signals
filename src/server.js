@@ -500,14 +500,13 @@ app.get('/analytics/trades.csv', async (req, res) => {
   }
 });
 
-app.use('/analytics', express.static(publicDir));
 
 // Static files
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.static(publicDir));
 
-// SPA fallback — bet koks kitas GET, kuris nepateko į API/static, grąžina index.html
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+// 404 fallback for any unmatched request
+app.use((req, res) => {
+  res.status(404).sendFile(path.join(publicDir, '404.html'));
 });
 
 const PORT = process.env.PORT || 3000;
