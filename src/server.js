@@ -19,6 +19,8 @@ import { configRoutes } from './routes/config.js';
 import { jobsRoutes } from './routes/jobs.js';
 import binanceRoutes from './integrations/binance/routes.js';
 import healthRoutes from './routes/health.js';
+import analyticsJobsRoutes from './routes/analytics.jobs.js';
+import { fetchEquity, fetchTrades } from './services/analyticsArtifacts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'client', 'public');
@@ -45,12 +47,69 @@ configRoutes(app);
 jobsRoutes(app);
 app.use('/binance', binanceRoutes);
 app.use('/', healthRoutes);
+app.use('/', analyticsJobsRoutes);
 
 app.get('/strategies', (_req, res) => {
   res.json(getStrategies().map(s => ({ id: s.id, label: s.id.toUpperCase() })));
 });
 
 function bool(v) { return !!(v && String(v).length); }
+
+function computeStatsFromTrades(trades, fromMs = null, toMs = null) {
+  const equity = [];
+  const returns = [];
+  let eq = 10000;
+  let peak = eq;
+  let maxDD = 0;
+  for (const t of trades) {
+    const prevEq = eq;
+    eq += t.pnl || 0;
+    const ts = t.closed_at || t.ts_close || t.ts || null;
+    if (ts !== null) equity.push({ ts, equity: Number(eq.toFixed(2)) });
+    if (eq > peak) peak = eq;
+    const dd = (eq - peak) / peak;
+    if (dd < maxDD) maxDD = dd;
+    if (prevEq > 0) returns.push((eq - prevEq) / prevEq);
+  }
+
+  const avg = arr => arr.reduce((a, b) => a + b, 0) / (arr.length || 1);
+  const std = arr => {
+    if (arr.length <= 1) return 0;
+    const m = avg(arr);
+    return Math.sqrt(arr.reduce((a, b) => a + Math.pow(b - m, 2), 0) / (arr.length - 1));
+  };
+
+  const total = trades.length;
+  const wins = trades.filter(t => (t.pnl || 0) > 0);
+  const profit = wins.reduce((a, b) => a + (b.pnl || 0), 0);
+  const losses = trades.filter(t => (t.pnl || 0) < 0);
+  const loss = losses.reduce((a, b) => a + (b.pnl || 0), 0);
+  const avgPnL = total ? (profit + loss) / total : 0;
+  const avgPnLPct = total ? trades.reduce((a, b) => a + (b.pnl_pct || 0), 0) / total : 0;
+  const profitFactor = loss !== 0 ? profit / Math.abs(loss) : null;
+  const winRate = total ? wins.length / total : 0;
+  const sharpe = returns.length > 1 ? (avg(returns) / std(returns)) * Math.sqrt(252) : null;
+  const downside = returns.filter(r => r < 0);
+  const sortino = downside.length > 1 ? (avg(returns) / std(downside)) * Math.sqrt(252) : null;
+  const cagr = equity.length > 1 && fromMs && toMs && toMs > fromMs
+    ? Math.pow(equity[equity.length - 1].equity / 10000, 31557600000 / (toMs - fromMs)) - 1
+    : null;
+
+  return {
+    equity,
+    stats: {
+      totalTrades: total,
+      winRate,
+      avgPnL,
+      avgPnLPct,
+      profitFactor,
+      maxDrawdown: maxDD,
+      sharpe,
+      sortino,
+      cagr,
+    }
+  };
+}
 
 app.head('/health', (_req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -351,55 +410,7 @@ app.get('/analytics', async (req, res) => {
     params: r.params || null,
   }));
 
-  const equity = [];
-  const returns = [];
-  let eq = 10000;
-  let peak = eq;
-  let maxDD = 0;
-  for (const t of closedTrades) {
-    const prevEq = eq;
-    eq += t.pnl || 0;
-    equity.push({ ts: t.closed_at, equity: Number(eq.toFixed(2)) });
-    if (eq > peak) peak = eq;
-    const dd = (eq - peak) / peak;
-    if (dd < maxDD) maxDD = dd;
-    if (prevEq > 0) returns.push((eq - prevEq) / prevEq);
-  }
-
-  const avg = arr => arr.reduce((a, b) => a + b, 0) / (arr.length || 1);
-  const std = arr => {
-    if (arr.length <= 1) return 0;
-    const m = avg(arr);
-    return Math.sqrt(arr.reduce((a, b) => a + Math.pow(b - m, 2), 0) / (arr.length - 1));
-  };
-
-  const total = closedTrades.length;
-  const wins = closedTrades.filter(t => (t.pnl || 0) > 0);
-  const profit = wins.reduce((a, b) => a + (b.pnl || 0), 0);
-  const losses = closedTrades.filter(t => (t.pnl || 0) < 0);
-  const loss = losses.reduce((a, b) => a + (b.pnl || 0), 0);
-  const avgPnL = total ? (profit + loss) / total : 0;
-  const avgPnLPct = total ? closedTrades.reduce((a, b) => a + (b.pnl_pct || 0), 0) / total : 0;
-  const profitFactor = loss !== 0 ? profit / Math.abs(loss) : null;
-  const winRate = total ? wins.length / total : 0;
-  const sharpe = returns.length > 1 ? (avg(returns) / std(returns)) * Math.sqrt(252) : null;
-  const downside = returns.filter(r => r < 0);
-  const sortino = downside.length > 1 ? (avg(returns) / std(downside)) * Math.sqrt(252) : null;
-  const cagr = equity.length > 1 && fromMs && toMs && toMs > fromMs
-    ? Math.pow(equity[equity.length - 1].equity / 10000, 31557600000 / (toMs - fromMs)) - 1
-    : null;
-
-  const stats = {
-    totalTrades: total,
-    winRate,
-    avgPnL,
-    avgPnLPct,
-    profitFactor,
-    maxDrawdown: maxDD,
-    sharpe,
-    sortino,
-    cagr,
-  };
+  const { equity, stats } = computeStatsFromTrades(closedTrades, fromMs, toMs);
 
   const q = new URLSearchParams();
   if (symbol) q.set('symbol', symbol);
@@ -408,6 +419,27 @@ app.get('/analytics', async (req, res) => {
   if (toMs) q.set('to', new Date(toMs).toISOString());
   if (paramsObj) q.set('params', JSON.stringify(paramsObj));
   const qs = q.toString();
+
+  let overlayEquity = null;
+  let overlayStats = null;
+  const overlayJobId = req.query.overlay_job_id ? Number(req.query.overlay_job_id) : null;
+  if (overlayJobId) {
+    try {
+      const { equity: oe } = await fetchEquity(overlayJobId);
+      overlayEquity = oe;
+    } catch (e) {
+      console.error('[analytics] overlay equity error:', e);
+    }
+    try {
+      const { trades: ot } = await fetchTrades(overlayJobId);
+      const { equity: tEq, stats: oStats } = computeStatsFromTrades(ot);
+      overlayStats = oStats;
+      if (!overlayEquity) overlayEquity = tEq;
+    } catch (e) {
+      if (!overlayStats) overlayStats = null;
+      console.error('[analytics] overlay trades error:', e);
+    }
+  }
 
   return res.json({
     filters: {
@@ -421,6 +453,8 @@ app.get('/analytics', async (req, res) => {
     equity,
     closedTrades,
     stats,
+    overlayEquity,
+    overlayStats,
     csv: {
       backtest: `/analytics/backtest.csv${qs ? `?${qs}` : ''}`,
       optimize: `/analytics/optimize.csv${qs ? `?${qs}` : ''}`,
