@@ -1,10 +1,9 @@
 name: Nightly Analytics + Deploy
 
 on:
-  schedule:
-    # Kasnakt 02:30 Vilnius laiku (Europe/Vilnius = UTC+2/3). Cron naudoja UTC -> 23:30 UTC ~ 02:30 LT (vasara)
-    - cron: '30 23 * * *'
-  workflow_dispatch: {}
+  push:
+    branches: ["develop"]
+  workflow_dispatch:
 
 jobs:
   analytics-deploy:
