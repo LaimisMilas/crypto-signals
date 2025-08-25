@@ -328,7 +328,7 @@ export async function getLiveState() {
   try {
     const state = await getState(client);
     if (state.running && !loopTimer) {
-      loopTimer = setInterval(step, LOOP_MS);
+      //loopTimer = setInterval(step, LOOP_MS);
     }
   } finally {
     client.release();
