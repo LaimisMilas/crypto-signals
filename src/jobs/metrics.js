@@ -1,4 +1,5 @@
 import { MeterProvider } from '@opentelemetry/sdk-metrics';
+import { jobQueueDepth } from '../observability/metrics.js';
 
 let meter;
 try {
@@ -21,6 +22,7 @@ export function observeQueue(fn) {
     if (!m) return;
     obs.observe(queueSize, m.size);
     obs.observe(queueAge, m.oldestAgeMs);
+    jobQueueDepth.set(m.size);
   }, [queueSize, queueAge]);
 }
 

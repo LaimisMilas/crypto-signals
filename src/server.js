@@ -23,6 +23,11 @@ import analyticsJobsRoutes from './routes/analytics.jobs.js';
 import './observability/otel.js';
 import httpLogger from './observability/http-logger.js';
 import logger from './observability/logger.js';
+import { requestIdMiddleware } from './middleware/request-id.js';
+import { loggerContextMiddleware } from './middleware/logger-context.js';
+import { errorHandler } from './middleware/error-handler.js';
+import { metricsRouter, httpRequests, httpDuration } from './observability/metrics.js';
+import { sseRouter } from './routes/sse.js';
 import analyticsOverlaysCsvRoutes from './routes/analytics.overlays.csv.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
 
@@ -36,9 +41,19 @@ const app = express();
 const pool = db;
 
 
-app.use(httpLogger);
-app.use(cors());
-app.use(cookieParser());
+  app.use(requestIdMiddleware);
+  app.use(httpLogger);
+  app.use(loggerContextMiddleware);
+  app.use((req, res, next) => {
+    const end = httpDuration.startTimer({ method: req.method, route: req.path });
+    res.on('finish', () => {
+      httpRequests.inc({ method: req.method, route: req.path, status: res.statusCode });
+      end({ status: res.statusCode });
+    });
+    next();
+  });
+  app.use(cors());
+  app.use(cookieParser());
 
 // Stripe webhook must use raw body
 app.post('/webhook/stripe', bodyParser.raw({ type: 'application/json' }), stripeWebhook);
@@ -47,16 +62,18 @@ app.post('/webhook/stripe', bodyParser.raw({ type: 'application/json' }), stripe
 app.use(bodyParser.json());
 
 // Equity routes (SSE and fetch)
-equityRoutes(app);
-userStreamRoutes(app);
-portfolioRoutes(app);
-riskRoutes(app);
-configRoutes(app);
-jobsRoutes(app);
-app.use('/binance', binanceRoutes);
-app.use('/', healthRoutes);
-app.use('/', analyticsJobsRoutes);
-app.use('/', analyticsOverlaysCsvRoutes);
+  equityRoutes(app);
+  userStreamRoutes(app);
+  portfolioRoutes(app);
+  riskRoutes(app);
+  configRoutes(app);
+  jobsRoutes(app);
+  app.use('/binance', binanceRoutes);
+  app.use('/', healthRoutes);
+  app.use('/', analyticsJobsRoutes);
+  app.use('/', analyticsOverlaysCsvRoutes);
+  app.use(sseRouter);
+  metricsRouter(app);
 
 app.get('/strategies', (_req, res) => {
   res.json(getStrategies().map(s => ({ id: s.id, label: s.id.toUpperCase() })));
@@ -568,11 +585,7 @@ app.get('/analytics/trades.csv', async (req, res) => {
 // Static files
 app.use(express.static(publicDir));
 
-// Central error handler
-app.use((err, req, res, _next) => {
-  logger.error({ err, reqId: req.id }, 'unhandled_error');
-  res.status(500).json({ error: 'Internal Server Error', reqId: req.id });
-});
+  app.use(errorHandler);
 
 // 404 fallback for any unmatched request
 app.use((req, res) => {
