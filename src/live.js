@@ -3,7 +3,7 @@ import { Pool } from 'pg';
 import fsp from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { generateSignals } from './strategy.js';
+import { generateSignals } from './strategies/ema.js';
 import { sendTradeAlert } from './notify/telegram.js';
 import { markTradeExecuted } from './jobs/metrics.js';
 

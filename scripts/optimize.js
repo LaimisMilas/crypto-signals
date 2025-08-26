@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { generateSignals } from '../src/strategy.js';
+import { generateSignals } from '../src/strategies/ema.js';
 import { loadCandles, computeMetrics } from '../src/backtest/utils.js';
 
 const args = process.argv.slice(2);

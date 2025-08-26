@@ -4,7 +4,7 @@ import 'dotenv/config';
 import { Pool } from 'pg';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { generateSignals } from '../src/strategy.js';
+import { generateSignals } from '../src/strategies/ema.js';
 
 // optional 3rd CLI argument overrides adxMin from params.json
 const [,, start='2024-01-01', end='2024-03-01', adxArg] = process.argv;

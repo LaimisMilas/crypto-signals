@@ -1,13 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { db } from './storage/db.js';
+import { db } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 (async () => {
-  const dir = path.join(__dirname, '..', 'migrations');
+  const dir = path.join(__dirname, '.', 'migrations');
   const files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort();
   for (const f of files) {
     const sql = fs.readFileSync(path.join(dir, f), 'utf8');
