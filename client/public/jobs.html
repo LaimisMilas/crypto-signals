@@ -42,7 +42,7 @@
     </table>
 
     <div id="detail" style="margin-top:24px;display:none;">
-      <h2>Job Detail <span id="detail-id"></span></h2>
+        <h2>Job Detail <span id="detail-id"></span> <span id="detail-trace"></span></h2>
       <div class="progress"><div id="detail-progress"></div></div>
       <pre id="log"></pre>
       <ul id="artifacts"></ul>
@@ -51,13 +51,29 @@
 
   <script src="/assets/nav.js"></script>
   <script src="/assets/ui-breadcrumbs.js"></script>
-  <script>
-    async function fetchJobs(){
-      const res = await fetch('/jobs');
-      const jobs = await res.json();
-      const tbody = document.querySelector('#jobs-table tbody');
-      tbody.innerHTML = jobs.map(j=>`<tr id="job-${j.id}"><td>${j.id}</td><td>${j.type}</td><td>${j.status}</td><td>${Math.round((j.progress||0)*100)}%</td><td><button data-view="${j.id}">view</button> <button data-cancel="${j.id}">cancel</button></td></tr>`).join('');
-    }
+    <script>
+      function BadgeTrace(meta){
+        if (!meta?.trace_id) return '';
+        const url = (window.OTEL_VIEWER_URL ? `${window.OTEL_VIEWER_URL}${meta.trace_id}` : null);
+        const t = meta.trace_id.slice(0,8);
+        return `<span class="badge">trace:${t}${url?` <a target="_blank" rel="noopener" href="${url}">open</a>`:''} <button data-copy="${meta.trace_id}">copy</button></span>`;
+      }
+
+      document.addEventListener('click', e => {
+        const btn = e.target.closest('button[data-copy]');
+        if (btn){
+          navigator.clipboard.writeText(btn.dataset.copy).then(()=>{
+            window.Toast?.open({ title:'Copied', variant:'success' });
+          });
+        }
+      });
+
+      async function fetchJobs(){
+        const res = await fetch('/jobs');
+        const jobs = await res.json();
+        const tbody = document.querySelector('#jobs-table tbody');
+        tbody.innerHTML = jobs.map(j=>`<tr id="job-${j.id}"><td>${j.id}</td><td>${j.type}</td><td>${j.status}</td><td>${Math.round((j.progress||0)*100)}%</td><td><button data-view="${j.id}">view</button> <button data-cancel="${j.id}">cancel</button></td></tr>`).join('');
+      }
     fetchJobs();
 
     document.getElementById('job-form').addEventListener('submit', async e=>{
@@ -85,9 +101,20 @@
       document.getElementById('detail').style.display='block';
       updateProgress(id, data.job.progress||0);
       if(es) es.close();
-      es = new EventSource(`/jobs/stream?id=${id}`);
-      es.addEventListener('job', ev=>{ const j = JSON.parse(ev.data); updateProgress(id, j.progress||0); fetchJobs(); });
-      es.addEventListener('log', ev=>{ const l = JSON.parse(ev.data); const log = document.getElementById('log'); log.textContent += `\n[${l.level}] ${l.msg}`; log.scrollTop = log.scrollHeight; });
+        es = new EventSource(`/jobs/stream?id=${id}`);
+        es.addEventListener('job', ev=>{
+          const j = JSON.parse(ev.data);
+          updateProgress(id, j.progress||0);
+          fetchJobs();
+          if (j.meta) document.getElementById('detail-trace').innerHTML = BadgeTrace(j.meta);
+        });
+        es.addEventListener('log', ev=>{
+          const l = JSON.parse(ev.data);
+          const logEl = document.getElementById('log');
+          logEl.textContent += `\n[${l.level}] ${l.msg}`;
+          logEl.scrollTop = logEl.scrollHeight;
+          if (l.meta) document.getElementById('detail-trace').innerHTML = BadgeTrace(l.meta);
+        });
     }
 
     function updateProgress(id, p){
