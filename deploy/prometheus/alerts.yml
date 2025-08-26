@@ -65,3 +65,23 @@ groups:
     labels: { severity: ticket }
     annotations:
       summary: "SSE reconnect bandymai > 50 per 30m"
+- name: pipeline.rules
+  rules:
+  - alert: OTelExporterErrors
+    expr: rate(otelcol_exporter_send_failed_spans[5m]) > 0
+    for: 10m
+    labels: { severity: page }
+    annotations:
+      summary: "OTel exporter failing (spans)"
+  - alert: OTelReceiverRefused
+    expr: rate(otelcol_receiver_refused_spans[5m]) > 0
+    for: 10m
+    labels: { severity: ticket }
+    annotations:
+      summary: "OTel receiver refused spans (overload?)"
+  - alert: LogsExporterErrors
+    expr: rate(otelcol_exporter_send_failed_logs[5m]) > 0
+    for: 10m
+    labels: { severity: ticket }
+    annotations:
+      summary: "OTel failing to export logs"

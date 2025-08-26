@@ -1,5 +1,46 @@
 version: '3.9'
 services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.99.0
+    command: ["--config=/etc/otel/collector-config.yaml"]
+    volumes:
+      - ./otel/collector-config.yaml:/etc/otel/collector-config.yaml
+    env_file:
+      - ./otel/env.example
+    ports:
+      - '4317:4317'
+      - '4318:4318'
+      - '8888:8888'
+      - '8889:8889'
+  loki:
+    image: grafana/loki:2.9.0
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/config.yaml
+      - loki-data:/loki
+    ports:
+      - '3100:3100'
+  # promtail (optional if not using filelog receiver)
+  # promtail:
+  #   image: grafana/promtail:2.9.0
+  #   volumes:
+  #     - ./promtail/promtail-config.yaml:/etc/promtail/config.yaml
+  #     - ../logs:/var/log/app
+  #   command: ["-config.file=/etc/promtail/config.yaml"]
+  api:
+    build:
+      context: ..
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      DEPLOY_ENV: development
+      SERVICE_NAMESPACE: crypto-signals
+    volumes:
+      - ../logs:/app/logs
+    depends_on:
+      - otel-collector
+      - loki
+    ports:
+      - '3000:3000'
   prometheus:
     image: prom/prometheus
     command: ['--config.file=/etc/prometheus/prometheus.yml']
@@ -20,3 +61,7 @@ services:
       - '3001:3000'
     depends_on:
       - prometheus
+volumes:
+  loki-data:
+  # logs volume for api container
+  # host path ../logs mounted
