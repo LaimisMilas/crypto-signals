@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../storage/db.js';
-import { listArtifacts, fetchEquity, fetchTrades } from '../services/analyticsArtifacts.js';
+import { listArtifacts, readArtifactCSV, normalizeEquity, normalizeTrades } from '../services/analyticsArtifacts.js';
 
 const router = express.Router();
 
@@ -17,29 +17,28 @@ router.get('/analytics/jobs', async (req, res) => {
     ORDER BY j.finished_at DESC NULLS LAST, j.id DESC
     LIMIT $4`;
   const { rows } = await db.query(q, [type || null, symbol || null, strategy || null, limit]);
-  const jobs = await Promise.all(rows.map(async j => {
-    const arts = await listArtifacts(j.id);
-    return { ...j, artifacts: arts };
-  }));
+  const jobs = await Promise.all(rows.map(async j => ({ ...j, artifacts: await listArtifacts(j.id) })));
   res.json({ jobs });
 });
 
 router.get('/analytics/job/:id/equity', async (req, res) => {
-  try {
-    const { equity, artifact } = await fetchEquity(req.params.id);
-    res.json({ equity, artifact });
-  } catch (e) {
-    res.status(404).json({ error: e.message });
-  }
+  const jobId = Number(req.params.id);
+  const arts = await listArtifacts(jobId);
+  const a = arts.find(x => /equity\.csv$|oos_equity\.csv$/i.test(x.path));
+  if (!a) return res.status(404).json({ error: 'equity artifact not found' });
+  const rows = await readArtifactCSV(jobId, a.path);
+  const equity = normalizeEquity(rows);
+  res.json({ equity, artifact: a });
 });
 
 router.get('/analytics/job/:id/trades', async (req, res) => {
-  try {
-    const { trades, artifact } = await fetchTrades(req.params.id);
-    res.json({ trades, artifact });
-  } catch (e) {
-    res.status(404).json({ error: e.message });
-  }
+  const jobId = Number(req.params.id);
+  const arts = await listArtifacts(jobId);
+  const a = arts.find(x => /trades\.csv$/i.test(x.path));
+  if (!a) return res.status(404).json({ error: 'trades artifact not found' });
+  const rows = await readArtifactCSV(jobId, a.path);
+  const trades = normalizeTrades(rows);
+  res.json({ trades, artifact: a });
 });
 
 export default router;
