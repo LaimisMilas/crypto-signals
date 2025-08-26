@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { db } from '../storage/db.js';
+import { jobArtifactsSize } from '../observability/metrics.js';
 
 const ROOT = process.env.JOBS_DIR || '/mnt/data/jobs';
 
@@ -11,13 +12,14 @@ export async function ensureJobDir(jobId) {
 }
 
 async function recordArtifact(jobId, kind, label, p) {
-  const stat = await fs.stat(p).catch(() => ({ size: 0 }));
-  await db.query(
-    'INSERT INTO job_artifacts(job_id, kind, label, path, size_bytes) VALUES ($1,$2,$3,$4,$5)',
-    [jobId, kind, label, p, stat.size]
-  );
-  return { path: p, size: stat.size };
-}
+    const stat = await fs.stat(p).catch(() => ({ size: 0 }));
+    jobArtifactsSize.labels(kind).set(stat.size);
+    await db.query(
+      'INSERT INTO job_artifacts(job_id, kind, label, path, size_bytes) VALUES ($1,$2,$3,$4,$5)',
+      [jobId, kind, label, p, stat.size]
+    );
+    return { path: p, size: stat.size };
+  }
 
 export async function writeJSON(jobId, filename, data, label = null) {
   const dir = await ensureJobDir(jobId);

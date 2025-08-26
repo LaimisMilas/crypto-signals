@@ -1,5 +1,6 @@
 import express from 'express';
 import { db, listen } from '../storage/db.js';
+import { sseConnections, sseEventsSent } from '../observability/metrics.js';
 
 const router = express.Router();
 const STARTING_EQUITY = 10000;
@@ -124,21 +125,24 @@ router.get('/live/equity', async (req, res) => {
   }
 });
 
-router.get('/live/equity-stream', async (req, res) => {
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-store',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
-  res.write('retry: 3000\n\n');
-  const send = (obj) => {
-    res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  };
+  router.get('/live/equity-stream', async (req, res) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-store',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    res.setHeader('x-request-id', req.reqId);
+    res.write('retry: 3000\n\n');
+    const send = (obj) => {
+      res.write(`data: ${JSON.stringify({ ...obj, reqId: req.reqId })}\n\n`);
+      sseEventsSent.inc({ event: obj.type || 'message' });
+    };
 
   const filters = parseFilters(req.query);
-  let { points, lastTs, lastEq } = await loadEquitySeries(filters);
-  send({ type: 'init', filters, equity: points });
+    let { points, lastTs, lastEq } = await loadEquitySeries(filters);
+    send({ type: 'init', filters, equity: points });
+    sseConnections.inc();
 
   let releaseListen = null;
   try {
@@ -159,15 +163,20 @@ router.get('/live/equity-stream', async (req, res) => {
     lastEq = r.lastEq;
   }, 5000);
 
-  const hb = setInterval(() => { res.write('event: ping\n\n'); }, 25000);
+    const hb = setInterval(() => {
+      res.write('event: ping\n');
+      res.write(`data: ${JSON.stringify({ ts: Date.now(), reqId: req.reqId })}\n\n`);
+      sseEventsSent.inc({ event: 'ping' });
+    }, 25000);
 
-  req.on('close', () => {
-    clearInterval(pollIv);
-    clearInterval(hb);
-    if (releaseListen) releaseListen();
-    try { res.end(); } catch {}
+    req.on('close', () => {
+      clearInterval(pollIv);
+      clearInterval(hb);
+      if (releaseListen) releaseListen();
+      try { res.end(); } catch {}
+      sseConnections.dec();
+    });
   });
-});
 
 export function equityRoutes(app) {
   app.use(router);

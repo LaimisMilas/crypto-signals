@@ -5,6 +5,7 @@ import { run as runBacktest } from './runners/backtest.js';
 import { run as runOptimize } from './runners/optimize.js';
 import { run as runWalkforward } from './runners/walkforward.js';
 import { observeQueue } from './metrics.js';
+import { jobDuration } from '../observability/metrics.js';
 
 const RUNNERS = {
   backtest: runBacktest,
@@ -49,25 +50,28 @@ async function runJob(job) {
   const cancelCheck = setInterval(async () => {
     if (await checkCanceled(job.id)) controller.abort();
   }, 1000);
-  try {
-    await log(job.id, 'info', `job ${job.id} started`);
-    const result = await runner(job, {
-      db,
-      fs: fsh,
-      log: (level, msg) => log(job.id, level, msg),
-      progress: (p) => setProgress(job.id, p),
-      signal: controller.signal,
-    });
-    await markStatus(job.id, 'succeeded', { result });
-  } catch (e) {
-    if (controller.signal.aborted) {
-      await markStatus(job.id, 'canceled');
-    } else {
-      await markStatus(job.id, 'failed', { error: e.message });
+    const end = jobDuration.startTimer({ type: job.type });
+    try {
+      await log(job.id, 'info', `job ${job.id} started`);
+      const result = await runner(job, {
+        db,
+        fs: fsh,
+        log: (level, msg) => log(job.id, level, msg),
+        progress: (p) => setProgress(job.id, p),
+        signal: controller.signal,
+      });
+      end({ status: 'ok' });
+      await markStatus(job.id, 'succeeded', { result });
+    } catch (e) {
+      end({ status: 'err' });
+      if (controller.signal.aborted) {
+        await markStatus(job.id, 'canceled');
+      } else {
+        await markStatus(job.id, 'failed', { error: e.message });
+      }
+    } finally {
+      clearInterval(cancelCheck);
     }
-  } finally {
-    clearInterval(cancelCheck);
-  }
 }
 
 export function startWorker() {
