@@ -1,0 +1,93 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+  filelog:
+    include:
+      - /var/log/app/*.jsonl
+    start_at: beginning
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+  batch: {}
+  attributes:
+    actions:
+      - action: delete
+        key: userEmail
+      - action: delete
+        key: token
+      - action: delete
+        key: authorization
+      - action: delete
+        key: cookie
+      - action: delete
+        key: sessionId
+  resource:
+    attributes:
+      - action: upsert
+        key: service.namespace
+        value: ${SERVICE_NAMESPACE}
+      - action: upsert
+        key: deployment.environment
+        value: ${DEPLOY_ENV}
+  tail_sampling:
+    decision_wait: 15s
+    policies:
+      - name: errors
+        type: status_code
+        status_code: ERROR
+        sample_rate: ${TRACE_SAMPLING_ERROR}
+      - name: important-routes
+        type: string_attribute
+        string_attribute:
+          key: http.target
+          values:
+            - /analytics/*
+            - /events*
+            - /live*
+            - /orders*
+        sample_rate: ${TRACE_SAMPLING_IMPORTANT}
+      - name: default
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: ${TRACE_SAMPLING_DEFAULT}
+
+exporters:
+  otlphttp:
+    endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  prometheus:
+    endpoint: 0.0.0.0:8889
+  loki:
+    endpoint: ${LOKI_ENDPOINT}
+    tls:
+      insecure: true
+  # googlecloud and awscloudwatch exporters are available but disabled by default
+  googlecloud:
+    project: ${GOOGLE_PROJECT_ID}
+  awscloudwatch:
+    region: ${AWS_REGION}
+
+extensions:
+  health_check:
+
+service:
+  extensions: [health_check]
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, attributes, resource, tail_sampling]
+      exporters: [${TRACES_EXPORTER}]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, attributes, resource]
+      exporters: [${METRICS_EXPORTER}]
+    logs:
+      receivers: [otlp, filelog]
+      processors: [memory_limiter, batch, attributes, resource]
+      exporters: [${LOGS_EXPORTER}]
