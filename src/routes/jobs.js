@@ -71,30 +71,36 @@ router.get('/jobs/:id/artifacts/:aid/download', async (req, res) => {
 });
 
 router.get('/jobs/stream', async (req, res) => {
-  res.set({
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-store',
-    Connection: 'keep-alive',
-  });
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  if (req.trace?.trace_id) res.write(`: trace_id=${req.trace.trace_id}\n`);
+  if (req.trace?.req_id) res.write(`: req_id=${req.trace.req_id}\n`);
+  res.write('\n');
   res.flushHeaders?.();
   const filterId = req.query.id ? Number(req.query.id) : null;
 
-  const sendUpdate = async (jobId) => {
-    const { rows: jobRows } = await db.query(
-      'SELECT id, status, progress FROM jobs WHERE id=$1',
-      [jobId]
-    );
-    if (jobRows[0]) {
-      res.write(`event: job\n` + `data: ${JSON.stringify(jobRows[0])}\n\n`);
-    }
-    const { rows: logRows } = await db.query(
-      'SELECT id, level, msg, ts FROM job_logs WHERE job_id=$1 ORDER BY id DESC LIMIT 1',
-      [jobId]
-    );
-    if (logRows[0]) {
-      res.write(`event: log\n` + `data: ${JSON.stringify(logRows[0])}\n\n`);
-    }
-  };
+    const sendEvent = (type, payload) => {
+      const meta = { trace_id: req.trace?.trace_id || null, req_id: req.trace?.req_id || null };
+      res.write(`event: ${type}\n`);
+      res.write(`data: ${JSON.stringify({ ...payload, meta })}\n\n`);
+    };
+    const sendUpdate = async (jobId) => {
+      const { rows: jobRows } = await db.query(
+        'SELECT id, status, progress FROM jobs WHERE id=$1',
+        [jobId]
+      );
+      if (jobRows[0]) {
+        sendEvent('job', jobRows[0]);
+      }
+      const { rows: logRows } = await db.query(
+        'SELECT id, level, msg, ts FROM job_logs WHERE job_id=$1 ORDER BY id DESC LIMIT 1',
+        [jobId]
+      );
+      if (logRows[0]) {
+        sendEvent('log', logRows[0]);
+      }
+    };
 
   const release = await listen('job_update', async (payload) => {
     const jobId = Number(payload);

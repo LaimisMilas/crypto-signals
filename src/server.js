@@ -40,7 +40,6 @@ const app = express();
 // Alias db pool for clarity
 const pool = db;
 
-
   app.use(requestIdMiddleware);
   app.use(httpLogger);
   app.use(loggerContextMiddleware);

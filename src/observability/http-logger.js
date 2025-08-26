@@ -10,6 +10,7 @@ export default pinoHttp({
     res: 'res',
     responseTime: 'dur_ms'
   },
+  wrapSerializers: true,
   serializers: {
     req (req) {
       return {
