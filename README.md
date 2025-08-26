@@ -84,5 +84,26 @@ Or via docker-compose:
 docker compose up --build
 ```
 
+## Observability & Monitoring
+
+Set `OBSERVABILITY_ENABLED=true` to enable OpenTelemetry tracing and metrics. Configure OTLP endpoint via `OTEL_EXPORTER_OTLP_ENDPOINT`, optional headers with `OTEL_EXPORTER_OTLP_HEADERS` and sampling ratio with `OTEL_SAMPLER_RATIO` (e.g. `0.1`).
+
+Logs are emitted in JSON via [pino](https://getpino.io/). Each request log includes fields such as `ts`, `reqId`, `method`, `path`, `status`, `dur_ms`, `ua`, `ip`, `trace_id` and `span_id`.
+
+Custom metrics exported:
+
+- `jobs.queue.size` – current jobs waiting in the queue
+- `jobs.queue.oldest_age_ms` – age of the oldest queued job
+- `runner.trades.executed` – counter of executed trades
+
+### GCP Monitoring
+
+- **Uptime check:** `GET /healthz` every minute (region EU)
+- **Alert policies:**
+  - Error rate: 5xx / all requests ≥ 2% (5 min window)
+  - Latency p95 > 1000ms for 5 min
+  - Risk halted: `risk_state.state == 'HALTED'` for >15 min (metric or log-based)
+  - Jobs backlog: `jobs.queue.oldest_age_ms` > 15 min
+
 ## Disclaimer
 Educational purposes only. No financial advice.

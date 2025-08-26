@@ -4,12 +4,25 @@ import * as fsh from './fs.js';
 import { run as runBacktest } from './runners/backtest.js';
 import { run as runOptimize } from './runners/optimize.js';
 import { run as runWalkforward } from './runners/walkforward.js';
+import { observeQueue } from './metrics.js';
 
 const RUNNERS = {
   backtest: runBacktest,
   optimize: runOptimize,
   walkforward: runWalkforward,
 };
+
+observeQueue(async () => {
+  const { rows } = await db.query(`
+    SELECT COUNT(*) AS size,
+           EXTRACT(EPOCH FROM now() - min(queued_at)) * 1000 AS oldest_age_ms
+    FROM jobs
+    WHERE status='queued'
+  `);
+  const size = Number(rows[0]?.size || 0);
+  const oldestAgeMs = Number(rows[0]?.oldest_age_ms || 0);
+  return { size, oldestAgeMs };
+});
 
 async function claimNextJob(client) {
   const { rows } = await client.query(`

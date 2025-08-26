@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { generateSignals } from './strategy.js';
 import { sendTradeAlert } from './notify/telegram.js';
+import { markTradeExecuted } from './jobs/metrics.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientPublicDir = path.join(__dirname, '..', 'client', 'public');
@@ -153,6 +154,7 @@ async function openPosition(client, { ts, price, size, params }) {
       ts,
     });
   }
+  markTradeExecuted();
 }
 
 async function closePosition(client, position, { ts, price, reason = 'SIGNAL', params }) {
@@ -172,6 +174,7 @@ async function closePosition(client, position, { ts, price, reason = 'SIGNAL', p
       ts,
     });
   }
+  markTradeExecuted();
 }
 
 async function applyRiskAndStops(client, lastPrice, ts, params) {

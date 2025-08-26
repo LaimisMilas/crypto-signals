@@ -25,6 +25,10 @@
     "wf:summary": "node scripts/wf-summary.js"
   },
   "dependencies": {
+    "@opentelemetry/auto-instrumentations-node": "^0.62.1",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.203.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.203.0",
+    "@opentelemetry/sdk-node": "^0.203.0",
     "axios": "^1.7.2",
     "body-parser": "^1.20.2",
     "cookie-parser": "^1.4.6",
@@ -34,6 +38,8 @@
     "express": "^4.19.2",
     "node-telegram-bot-api": "^0.66.0",
     "pg": "^8.16.3",
+    "pino": "^9.9.0",
+    "pino-http": "^10.5.0",
     "stripe": "^16.6.0",
     "ws": "^8.18.0"
   },
