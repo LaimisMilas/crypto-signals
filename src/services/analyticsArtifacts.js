@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { parse } from 'csv-parse/sync';
 import { db } from '../storage/db.js';
+import { jobEquityPoints } from '../metrics-job.js';
 
 const cache = new Map(); // key -> { data, ts, mtime }
 const TTL_MS = 10 * 60 * 1000;
@@ -34,14 +35,16 @@ export async function readArtifactCSV(jobId, artifactPath){
   return rows;
 }
 
-export function normalizeEquity(rows){
+export function normalizeEquity(rows, jobType = null){
   if (!rows.length) return [];
   const timeKey = ['ts','time','date','datetime'].find(k => k in rows[0]) || 'ts';
   const equityKey = ['equity','balance','value','pv'].find(k => k in rows[0]) || 'equity';
-  return rows.map(r => ({
+  const points = rows.map(r => ({
     ts: Number(r[timeKey] ?? r[timeKey.toLowerCase()]),
     equity: Number(r[equityKey] ?? r[equityKey.toLowerCase()])
   })).filter(p => Number.isFinite(p.ts) && Number.isFinite(p.equity));
+  if (jobType) jobEquityPoints.labels(jobType).inc(points.length);
+  return points;
 }
 
 export function normalizeTrades(rows){

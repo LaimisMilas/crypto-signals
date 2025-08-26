@@ -5,7 +5,7 @@ import { run as runBacktest } from './runners/backtest.js';
 import { run as runOptimize } from './runners/optimize.js';
 import { run as runWalkforward } from './runners/walkforward.js';
 import { observeQueue } from './metrics.js';
-import { jobDuration } from '../observability/metrics.js';
+import { jobDuration } from '../metrics-job.js';
 
 const RUNNERS = {
   backtest: runBacktest,

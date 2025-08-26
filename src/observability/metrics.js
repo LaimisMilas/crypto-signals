@@ -26,27 +26,9 @@ export const sseEventsSent = new client.Counter({
   labelNames: ['event']
 });
 
-export const jobDuration = new client.Histogram({
-  name: 'job_duration_seconds',
-  help: 'Job duration seconds',
-  labelNames: ['type', 'status'],
-  buckets: [0.1, 0.5, 1, 5, 15, 30, 60, 120, 300, 600]
-});
-
-export const jobArtifactsSize = new client.Gauge({
-  name: 'job_artifacts_size_bytes',
-  help: 'Last job artifact size bytes',
-  labelNames: ['type']
-});
-
 export const jobQueueDepth = new client.Gauge({
   name: 'job_queue_depth',
   help: 'Current job queue depth'
-});
-
-export const overlayEquityPoints = new client.Counter({
-  name: 'overlay_equity_points',
-  help: 'Overlay equity points generated'
 });
 
 export function metricsRouter(app) {

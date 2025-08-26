@@ -11,6 +11,23 @@
 - **SSE events** – events sent by type.
 - **Job duration** – histogram of background job durations.
 
+## Jobs observability
+
+Background runners expose domain metrics:
+
+- `job_duration_seconds{type,status}` – duration per job type and final status.
+- `job_artifacts_size_bytes{type}` – size of the last artifact produced by a job.
+- `job_equity_points_total{type}` – count of normalized equity points.
+
+Grafana "Jobs" block visualizes:
+
+- Heatmap of `job_duration_seconds_bucket` by type.
+- Graph of `job_artifacts_size_bytes` by type.
+- Graph of `rate(job_equity_points_total[5m])` by type.
+
+If the `JobOverlayEmpty` alert fires, overlay generation is stuck.
+Use the provided `traceId` and `jobId` in logs to troubleshoot.
+
 ## How to reproduce
 ```
 curl -i http://localhost:3000/api/ping -H "x-request-id: test-123"
