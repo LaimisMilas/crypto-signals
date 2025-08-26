@@ -2,7 +2,7 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
-import { Resource } from '@opentelemetry/resources';
+import otelResources from '@opentelemetry/resources';
 import { SemanticResourceAttributes as S } from '@opentelemetry/semantic-conventions';
 
 let sdk;
@@ -17,8 +17,9 @@ export async function startOtel() {
       ? process.env.OTEL_EXPORTER_OTLP_ENDPOINT.replace('/v1/traces', '/v1/metrics')
       : undefined
   });
-  sdk = new NodeSDK({
-    resource: new Resource({ [S.SERVICE_NAME]: 'crypto-signals-api' }),
+    const { resourceFromAttributes } = otelResources;
+    sdk = new NodeSDK({
+      resource: resourceFromAttributes({ [S.SERVICE_NAME]: 'crypto-signals-api' }),
     traceExporter,
     metricReader: new PeriodicExportingMetricReader({ exporter: metricExporter })
   });
