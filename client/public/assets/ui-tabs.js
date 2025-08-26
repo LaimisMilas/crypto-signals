@@ -2,6 +2,11 @@
   const SEL_TABS = '.ui-tabs';
   const HOV_DELAY = 80;
 
+  // === UI v1.2.1 additions (guards) ===
+  const UITABS_CAN_HOVER_PREFETCH =
+    window.matchMedia?.('(hover: hover) and (pointer: fine)').matches &&
+    !(navigator.connection && navigator.connection.saveData);
+
   function parseDesiredTab() {
     const usp = new URLSearchParams(location.search);
     const q = usp.get('tab');
@@ -71,10 +76,22 @@
       const onLeave = () => {
         if (timer) clearTimeout(timer);
       };
-      lnk.addEventListener('mouseenter', onEnter);
-      lnk.addEventListener('focus', onEnter);
-      lnk.addEventListener('mouseleave', onLeave);
-      lnk.addEventListener('blur', onLeave);
+      if (UITABS_CAN_HOVER_PREFETCH) {
+        lnk.addEventListener('mouseenter', onEnter);
+        lnk.addEventListener('focus', onEnter);
+        lnk.addEventListener('mouseleave', onLeave);
+        lnk.addEventListener('blur', onLeave);
+      } else {
+        // Jei negalim hover prefetch, leidžiam tik focus prefetch (mažiau agresyvu)
+        // (pridėk nedidelį delay kaip ir hover atveju)
+        lnk.addEventListener('focus', () => {
+          setTimeout(() => {
+            const moduleName = lnk.getAttribute('data-module');
+            const resource = lnk.getAttribute('data-prefetch-url') || null;
+            window.UILazy?.prefetch?.(moduleName, { resource });
+          }, HOV_DELAY);
+        });
+      }
     });
   }
 
@@ -82,4 +99,55 @@
     document.querySelectorAll(SEL_TABS).forEach(setupTabs);
     enablePrefetch();
   });
+
+  // === UI v1.2.1 additions (idle + viewport prefetch) ===
+  document.addEventListener('DOMContentLoaded', () => {
+    const tabsRoot = document.querySelector('.ui-tabs');
+    if (!tabsRoot) return;
+
+    const doBatchPrefetch = () => {
+      const links = tabsRoot.querySelectorAll('[data-module]');
+      links.forEach((lnk) => {
+        const moduleName = lnk.getAttribute('data-module');
+        const resource = lnk.getAttribute('data-prefetch-url') || null;
+        requestIdleCallback
+          ? requestIdleCallback(() => window.UILazy?.prefetch?.(moduleName, { resource }), { timeout: 300 })
+          : setTimeout(() => window.UILazy?.prefetch?.(moduleName, { resource }), 200);
+      });
+    };
+
+    // Kai tab juosta pasirodo viewport'e — vienkartinis prefetch
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) {
+          doBatchPrefetch();
+          io.disconnect();
+        }
+      });
+    });
+    io.observe(tabsRoot);
+  });
+
+  // === UI v1.2.1 additions (Home/End keyboard support) ===
+  document.addEventListener('DOMContentLoaded', () => {
+    const root = document.querySelector('.ui-tabs');
+    if (!root) return;
+    root.addEventListener('keydown', (e) => {
+      if (e.key !== 'Home' && e.key !== 'End') return;
+      const tabs = Array.from(root.querySelectorAll('[role="tab"]'));
+      const i = tabs.indexOf(document.activeElement);
+      if (i < 0) return;
+      if (e.key === 'Home') { tabs[0]?.focus(); e.preventDefault(); }
+      if (e.key === 'End')  { tabs[tabs.length - 1]?.focus(); e.preventDefault(); }
+    });
+  });
+
+  // === UI v1.2.1 optional (tab panel scroll memory) ===
+  window.UITabsMemory = window.UITabsMemory || (() => {
+    const mem = new Map();
+    return {
+      onHide: (panelEl) => { if (panelEl) mem.set(panelEl.id, panelEl.scrollTop); },
+      onShow: (panelEl) => { if (panelEl) panelEl.scrollTop = mem.get(panelEl.id) || 0; }
+    };
+  })();
 })();
