@@ -2,7 +2,7 @@ import express from 'express';
 import { requestId } from './middleware/request-id.js';
 import { loggerContext } from './middleware/logger-context.js';
 import { errorHandler } from './middleware/error-handler.js';
-import { metricsRouter, httpDuration, httpRequests } from './metrics.js';
+import { metricsRouter, httpDuration, httpRequests } from './observability/metrics.js';
 import { sseRoutes } from './routes/sse.js';
 import { healthRoutes } from './routes/health.js';
 
