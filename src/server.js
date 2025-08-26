@@ -23,6 +23,7 @@ import analyticsJobsRoutes from './routes/analytics.jobs.js';
 import './observability/otel.js';
 import httpLogger from './observability/http-logger.js';
 import logger from './observability/logger.js';
+import traceProp from './observability/trace-prop.js';
 import analyticsOverlaysCsvRoutes from './routes/analytics.overlays.csv.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
 
@@ -37,6 +38,13 @@ const pool = db;
 
 
 app.use(httpLogger);
+app.use(traceProp);
+app.use((req, res, next) => {
+  if (req.log && req.trace) {
+    req.log = req.log.child({ trace_id: req.trace.trace_id, span_id: req.trace.span_id, req_id: req.trace.req_id });
+  }
+  next();
+});
 app.use(cors());
 app.use(cookieParser());
 

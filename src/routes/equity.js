@@ -124,17 +124,19 @@ router.get('/live/equity', async (req, res) => {
   }
 });
 
-router.get('/live/equity-stream', async (req, res) => {
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-store',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
-  res.write('retry: 3000\n\n');
-  const send = (obj) => {
-    res.write(`data: ${JSON.stringify(obj)}\n\n`);
-  };
+  router.get('/live/equity-stream', async (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (req.trace?.trace_id) res.write(`: trace_id=${req.trace.trace_id}\n`);
+    if (req.trace?.req_id) res.write(`: req_id=${req.trace.req_id}\n`);
+    res.write('\n');
+    res.write('retry: 3000\n\n');
+    const send = (obj) => {
+      const meta = { trace_id: req.trace?.trace_id || null, req_id: req.trace?.req_id || null };
+      res.write(`data: ${JSON.stringify({ ...obj, meta })}\n\n`);
+    };
 
   const filters = parseFilters(req.query);
   let { points, lastTs, lastEq } = await loadEquitySeries(filters);
@@ -159,7 +161,11 @@ router.get('/live/equity-stream', async (req, res) => {
     lastEq = r.lastEq;
   }, 5000);
 
-  const hb = setInterval(() => { res.write('event: ping\n\n'); }, 25000);
+    const hb = setInterval(() => {
+      const meta = { trace_id: req.trace?.trace_id || null, req_id: req.trace?.req_id || null };
+      res.write(`event: ping\n`);
+      res.write(`data: ${JSON.stringify({ meta })}\n\n`);
+    }, 25000);
 
   req.on('close', () => {
     clearInterval(pollIv);
