@@ -3,17 +3,19 @@ import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentation
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
-import { Resource } from '@opentelemetry/resources';
+import otelResources from '@opentelemetry/resources';
 import { SemanticResourceAttributes as S } from '@opentelemetry/semantic-conventions';
 import { ParentBasedSampler, TraceIdRatioBasedSampler } from '@opentelemetry/sdk-trace-base';
-import pkg from '../../package.json' assert { type: 'json' };
+import pkg from '../../package.json' with { type: 'json' };
+
+const { resourceFromAttributes } = otelResources;
 
 let sdk;
 if (process.env.OBSERVABILITY_ENABLED === 'true') {
-  const resource = new Resource({
-    [S.SERVICE_NAME]: 'crypto-signals',
-    [S.SERVICE_VERSION]: pkg.version
-  });
+    const resource = resourceFromAttributes({
+      [S.SERVICE_NAME]: 'crypto-signals',
+      [S.SERVICE_VERSION]: pkg.version
+    });
 
   sdk = new NodeSDK({
     resource,

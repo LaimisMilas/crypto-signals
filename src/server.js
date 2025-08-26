@@ -1,4 +1,3 @@
-import app from './app.js';
 import { startOtel } from './otel.js';
 import fs from 'fs/promises';
 import express from 'express';
@@ -20,48 +19,41 @@ import { getStrategies } from './strategies/index.js';
 import { configRoutes } from './routes/config.js';
 import { jobsRoutes } from './routes/jobs.js';
 import binanceRoutes from './integrations/binance/routes.js';
-import healthRoutes from './routes/health.js';
+import { healthRoutes } from './routes/health.js';
 import analyticsJobsRoutes from './routes/analytics.jobs.js';
 import './observability/otel.js';
 import httpLogger from './observability/http-logger.js';
 import logger from './observability/logger.js';
-import { requestIdMiddleware } from './middleware/request-id.js';
-import { loggerContextMiddleware } from './middleware/logger-context.js';
+import { requestId } from './middleware/request-id.js';
+import { loggerContext } from './middleware/logger-context.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { metricsRouter, httpRequests, httpDuration } from './observability/metrics.js';
-import { sseRouter } from './routes/sse.js';
+import { sseRoutes } from './routes/sse.js';
 import analyticsOverlaysCsvRoutes from './routes/analytics.overlays.csv.js';
 import analyticsOverlayShareRoutes from './routes/analytics.overlay.share.js';
 import analyticsOptimizeTopRoutes from './routes/analytics.optimize.top.js';
 import analyticsOverlayRoutes from './routes/analytics-overlay.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
 
-const port = process.env.PORT || 3000;
-
-async function start() {
-  await startOtel();
-  app.listen(port, () => {
-    console.log(`listening on ${port}`);
-  });
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'client', 'public');
 const app = express();
 // Alias db pool for clarity
 const pool = db;
 
-  app.use(requestIdMiddleware);
-  app.use(httpLogger);
-  app.use(loggerContextMiddleware);
-  app.use((req, res, next) => {
-    const end = httpDuration.startTimer({ method: req.method, route: req.path });
-    res.on('finish', () => {
-      httpRequests.inc({ method: req.method, route: req.path, status: res.statusCode });
-      end({ status: res.statusCode });
-    });
-    next();
+app.use(requestId);
+app.use(httpLogger);
+app.use(loggerContext);
+app.use((req, res, next) => {
+  const end = httpDuration.startTimer({ method: req.method, route: req.path });
+  res.on('finish', () => {
+    httpRequests.inc({ method: req.method, route: req.path, status: res.statusCode });
+    end({ status: res.statusCode });
   });
-  app.use(cors());
-  app.use(cookieParser());
+  next();
+});
+app.use(cors());
+app.use(cookieParser());
 
 // Stripe webhook must use raw body
 app.post('/webhook/stripe', bodyParser.raw({ type: 'application/json' }), stripeWebhook);
@@ -70,20 +62,20 @@ app.post('/webhook/stripe', bodyParser.raw({ type: 'application/json' }), stripe
 app.use(bodyParser.json());
 
 // Equity routes (SSE and fetch)
-  equityRoutes(app);
-  userStreamRoutes(app);
-  portfolioRoutes(app);
-  riskRoutes(app);
-  configRoutes(app);
-  jobsRoutes(app);
-  app.use('/binance', binanceRoutes);
-  app.use('/', healthRoutes);
-  app.use('/', analyticsJobsRoutes);
+equityRoutes(app);
+userStreamRoutes(app);
+portfolioRoutes(app);
+riskRoutes(app);
+configRoutes(app);
+jobsRoutes(app);
+app.use('/binance', binanceRoutes);
+healthRoutes(app);
+app.use('/', analyticsJobsRoutes);
   app.use('/', analyticsOverlaysCsvRoutes);
   app.use('/', analyticsOverlayShareRoutes);
   app.use('/', analyticsOptimizeTopRoutes);
   app.use('/', analyticsOverlayRoutes);
-  app.use(sseRouter);
+  sseRoutes(app);
   metricsRouter(app);
 
 app.get('/strategies', (_req, res) => {
@@ -621,7 +613,7 @@ app.get('/analytics/trades.csv', async (req, res) => {
 // Static files
 app.use(express.static(publicDir));
 
-  app.use(errorHandler);
+app.use(errorHandler);
 
 // 404 fallback for any unmatched request
 app.use((req, res) => {
@@ -629,12 +621,16 @@ app.use((req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  logger.info(`Server running on :${PORT}`);
-});
 
-if (process.env.ENABLE_JOB_WORKER === 'true') {
-  import('./jobs/worker.js').then(m => m.startWorker());
+async function start() {
+  await startOtel();
+  app.listen(PORT, () => {
+    logger.info(`Server running on :${PORT}`);
+  });
+
+  if (process.env.ENABLE_JOB_WORKER === 'true') {
+    import('./jobs/worker.js').then(m => m.startWorker());
+  }
 }
 
 start();
