@@ -23,6 +23,7 @@ import analyticsJobsRoutes from './routes/analytics.jobs.js';
 import './observability/otel.js';
 import httpLogger from './observability/http-logger.js';
 import logger from './observability/logger.js';
+import analyticsOverlaysCsvRoutes from './routes/analytics.overlays.csv.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
 
 process.on('uncaughtException', e => logger.error({ err: e }, 'uncaughtException'));
@@ -55,6 +56,7 @@ jobsRoutes(app);
 app.use('/binance', binanceRoutes);
 app.use('/', healthRoutes);
 app.use('/', analyticsJobsRoutes);
+app.use('/', analyticsOverlaysCsvRoutes);
 
 app.get('/strategies', (_req, res) => {
   res.json(getStrategies().map(s => ({ id: s.id, label: s.id.toUpperCase() })));
@@ -427,31 +429,43 @@ app.get('/analytics', async (req, res) => {
   if (paramsObj) q.set('params', JSON.stringify(paramsObj));
   const qs = q.toString();
 
-  let overlayEquity = null;
-  let overlayStats = null;
-  const overlayJobId = req.query.overlay_job_id ? Number(req.query.overlay_job_id) : null;
-  if (overlayJobId) {
-    try {
-      const arts = await listArtifacts(overlayJobId);
-      const a = arts.find(x => /equity\.csv$|oos_equity\.csv$/i.test(x.path));
-      if (a) {
-        const rows = await readArtifactCSV(overlayJobId, a.path);
-        overlayEquity = normalizeEquity(rows);
-        const ret = overlayEquity.length ? (overlayEquity.at(-1).equity / overlayEquity[0].equity - 1) : null;
+  let overlayEquities = null;
+  let overlayStatsByJobId = null;
+  const overlayJobIds = (req.query.overlay_job_ids || '')
+    .split(',')
+    .map(s => Number(s.trim()))
+    .filter(Boolean)
+    .slice(0, 5);
+  if (overlayJobIds.length) {
+    overlayEquities = [];
+    overlayStatsByJobId = {};
+    for (const id of overlayJobIds) {
+      try {
+        const arts = await listArtifacts(id);
+        const a = arts.find(x => /equity\.csv$|oos_equity\.csv$/i.test(x.path));
+        if (!a) continue;
+        const rows = await readArtifactCSV(id, a.path);
+        const eq = normalizeEquity(rows);
+        if (!eq.length) continue;
+
+        const ret = eq.at(-1).equity / eq[0].equity - 1;
         let peak = -Infinity;
         let maxDD = 0;
-        overlayEquity.forEach(p => {
+        eq.forEach(p => {
           peak = Math.max(peak, p.equity);
           maxDD = Math.min(maxDD, (p.equity / peak - 1));
         });
-        overlayStats = { return: ret, maxDD };
+
+        overlayEquities.push({ jobId: id, label: `#${id}`, equity: eq });
+        overlayStatsByJobId[id] = { return: ret, maxDD };
+      } catch (e) {
+        console.error('[analytics] overlay equity error:', e);
       }
-    } catch (e) {
-      console.error('[analytics] overlay equity error:', e);
-      overlayEquity = null;
-      overlayStats = null;
     }
   }
+
+  const overlayEquity = overlayEquities?.[0]?.equity || null;
+  const overlayStats = overlayJobIds.length === 1 ? (overlayStatsByJobId?.[overlayJobIds[0]] || null) : null;
 
   return res.json({
     filters: {
@@ -467,6 +481,8 @@ app.get('/analytics', async (req, res) => {
     stats,
     overlayEquity,
     overlayStats,
+    overlayEquities,
+    overlayStatsByJobId,
     csv: {
       backtest: `/analytics/backtest.csv${qs ? `?${qs}` : ''}`,
       optimize: `/analytics/optimize.csv${qs ? `?${qs}` : ''}`,

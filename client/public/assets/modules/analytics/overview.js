@@ -11,35 +11,39 @@ export async function mount(root){
     data: { datasets: [{ label: 'Equity', data: [], borderWidth:2, pointRadius:0 }] },
     options: { responsive: true }
   });
+  const COLORS = ['#4cc9f0','#ffd166','#06d6a0','#ef476f','#118ab2'];
+  const colorOf = (jobId) => COLORS[jobId % COLORS.length];
 
-  function applyOverlay(data){
-    const ds = {
-      label: 'Overlay',
-      data: data.map(p=>({ x:p.ts, y:p.equity })),
-      borderDash: [6,4],
-      borderWidth: 2,
-      pointRadius: 0
-    };
-    const i = chart.data.datasets.findIndex(d => d.label==='Overlay');
-    if (i>=0) chart.data.datasets[i] = ds; else chart.data.datasets.push(ds);
+  function applyMultiOverlays(items){
+    chart.data.datasets = chart.data.datasets.filter(d => !d.meta || d.meta.type !== 'overlay');
+    for (const it of items){
+      chart.data.datasets.push({
+        label: `Overlay ${it.jobId}`,
+        data: it.equity.map(p => ({ x:p.ts, y:p.equity })),
+        borderDash: [6,4],
+        borderWidth: 2,
+        pointRadius: 0,
+        borderColor: colorOf(it.jobId),
+        meta:{ type:'overlay', jobId: it.jobId }
+      });
+    }
     chart.update('none');
   }
-  function clearOverlay(){
-    chart.data.datasets = chart.data.datasets.filter(d => d.label!=='Overlay');
-    chart.update('none');
-  }
 
-  const onOverlay = e => applyOverlay(e.detail.overlay);
-  const onClear = () => clearOverlay();
+  const onOverlays = e => applyMultiOverlays(e.detail.items);
+  const onClear = () => {
+    chart.data.datasets = chart.data.datasets.filter(d => !d.meta || d.meta.type !== 'overlay');
+    chart.update('none');
+  };
   const onPeriod = () => {};
-  window.addEventListener('analytics:overlay', onOverlay);
+  window.addEventListener('analytics:overlays', onOverlays);
   window.addEventListener('analytics:overlay:clear', onClear);
   window.addEventListener('analytics:period:set', onPeriod);
 
   return {
     unmount(){
       try { chart.destroy(); } catch { /* ignore */ }
-      window.removeEventListener('analytics:overlay', onOverlay);
+      window.removeEventListener('analytics:overlays', onOverlays);
       window.removeEventListener('analytics:overlay:clear', onClear);
       window.removeEventListener('analytics:period:set', onPeriod);
       root.innerHTML = '';
