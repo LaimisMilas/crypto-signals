@@ -8,21 +8,23 @@ export async function mount(root){
       <div><label>Symbol<br><input id="ov-symbol" placeholder="e.g. BTCUSDT"></label></div>
       <div><label>Strategy<br><input id="ov-strategy" placeholder="e.g. ema"></label></div>
       <button id="ov-load" class="btn">Load jobs</button>
-      <button id="ov-apply" class="btn">Apply overlay</button>
-      <button id="ov-clear" class="btn">Clear overlay</button>
-      <button id="ov-sync" class="btn">Sync period</button>
+      <button id="ov-apply" class="btn">Apply overlays</button>
+      <button id="ov-clear" class="btn">Clear all</button>
+      <button id="ov-export" class="btn">Export CSV</button>
     </div>
     <div id="ov-jobs" style="margin-top:12px"></div>
-    <div id="ov-stats" style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px"></div>
-    <div id="ov-artifacts" style="margin-top:12px"></div>
+    <div id="ov-stats" style="margin-top:12px"></div>
   `;
 
   const el = id => root.querySelector(id);
   const input = { type: el('#ov-type'), symbol: el('#ov-symbol'), strategy: el('#ov-strategy') };
-  const btn = { load: el('#ov-load'), apply: el('#ov-apply'), clear: el('#ov-clear'), sync: el('#ov-sync') };
-  const box = { jobs: el('#ov-jobs'), stats: el('#ov-stats'), arts: el('#ov-artifacts') };
+  const btn = { load: el('#ov-load'), apply: el('#ov-apply'), clear: el('#ov-clear'), export: el('#ov-export') };
+  const box = { jobs: el('#ov-jobs'), stats: el('#ov-stats') };
 
-  let selectedJob = null;
+  const COLORS = ['#4cc9f0','#ffd166','#06d6a0','#ef476f','#118ab2'];
+  const colorOf = (jobId) => COLORS[jobId % COLORS.length];
+
+  const selectedJobs = new Map();
   let jobs = [];
 
   async function loadJobs(){
@@ -37,7 +39,7 @@ export async function mount(root){
       renderJobs();
       Toast.open({ title:'Jobs loaded', variant:'success' });
     }catch(e){
-      Toast.open({ title:'Failed to load jobs', description: e.message, variant:'error' });
+      Toast.open({ title:'Failed to load jobs', description:e.message, variant:'error' });
     }
   }
 
@@ -45,92 +47,114 @@ export async function mount(root){
     box.jobs.innerHTML = jobs.length ? jobs.map(j => {
       const p = j.params || {};
       const r = j.result || {};
-      const sel = (selectedJob && selectedJob.id===j.id) ? 'style="border:1px solid #4cc9f0"' : '';
-      return `<div class="card" data-id="${j.id}" ${sel} style="padding:10px;border:1px solid #222;border-radius:10px;margin-bottom:6px;cursor:pointer">
-        <div><b>#${j.id}</b> • ${j.type} • ${new Date(j.finished_at||j.created_at).toLocaleString()}</div>
+      const checked = selectedJobs.has(j.id) ? 'checked' : '';
+      return `<div class="card" style="padding:10px;border:1px solid #222;border-radius:10px;margin-bottom:6px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" data-id="${j.id}" ${checked}>
+          <span style="width:12px;height:12px;background:${colorOf(j.id)};display:inline-block;border-radius:2px"></span>
+          <span><b>#${j.id}</b> • ${j.type} • ${new Date(j.finished_at||j.created_at).toLocaleString()}</span>
+        </label>
         <div style="font-size:13px;color:#9aa0a6">symbol=${p.symbol||'-'} strategy=${p.strategyId||'-'}</div>
         <div style="font-size:13px">return=${(r.return ?? r.cagr ?? '').toString()} PF=${r.profitFactor ?? ''}</div>
       </div>`;
     }).join('') : '<div style="opacity:.7">No jobs</div>';
 
-    box.jobs.querySelectorAll('[data-id]').forEach(card=>{
-      card.addEventListener('click', ()=>{
-        const id = Number(card.dataset.id);
-        selectedJob = jobs.find(x=>x.id===id);
-        renderJobs();
-        renderArtifacts();
+    box.jobs.querySelectorAll('input[type=checkbox][data-id]').forEach(chk => {
+      chk.addEventListener('change', () => {
+        const id = Number(chk.dataset.id);
+        if (chk.checked){
+          if (selectedJobs.size >= 5){
+            chk.checked = false;
+            Toast.open({ title:'Max 5 overlays', variant:'warning' });
+            return;
+          }
+          const job = jobs.find(x=>x.id===id);
+          selectedJobs.set(id, job);
+        }else{
+          selectedJobs.delete(id);
+        }
       });
     });
   }
 
-  function renderArtifacts(){
-    if (!selectedJob){ box.arts.innerHTML=''; return; }
-    const arts = selectedJob.artifacts || [];
-    box.arts.innerHTML = `<div><b>Artifacts</b></div>` + (arts.length? arts.map(a=>(
-      `<div><a href="/jobs/${selectedJob.id}/artifacts/${a.id}/download" target="_blank" rel="noopener">${a.label||a.path}</a> <span style="color:#9aa0a6">(${a.kind}, ${a.size_bytes||0} bytes)</span></div>`
-    )).join('') : '<div style="opacity:.7">No artifacts</div>');
+  function renderStats(stats){
+    if (!stats || !selectedJobs.size){ box.stats.innerHTML=''; return; }
+    const ids = Array.from(selectedJobs.keys());
+    const baselineId = ids[0];
+    const base = stats[baselineId] || { return:0, maxDD:0 };
+    const fmtPct = v => (v==null? '-': (v*100).toFixed(2)+'%');
+    const rows = ids.map(id => {
+      const j = selectedJobs.get(id) || {};
+      const s = stats[id] || {};
+      const pf = j.result?.profitFactor;
+      return `<tr>
+        <td><span style="display:inline-block;width:10px;height:10px;background:${colorOf(id)};margin-right:4px"></span>#${id}</td>
+        <td>${j.type||''}</td>
+        <td>${j.params?.symbol||'-'}</td>
+        <td>${fmtPct(s.return)}</td>
+        <td>${fmtPct(s.return - base.return)}</td>
+        <td>${fmtPct(s.maxDD)}</td>
+        <td>${fmtPct(s.maxDD - base.maxDD)}</td>
+        <td>${pf ?? '-'}</td>
+      </tr>`;
+    }).join('');
+    box.stats.innerHTML = `<table class="table"><thead><tr><th>Job</th><th>Type</th><th>Symbol</th><th>Return</th><th>ΔReturn</th><th>MaxDD</th><th>ΔMaxDD</th><th>PF</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
-  async function applyOverlay(){
-    if (!selectedJob){ Toast.open({ title:'Pick a job first', variant:'warning' }); return; }
-    const url = `/analytics?overlay_job_id=${selectedJob.id}`;
+  async function applyOverlays(){
+    const ids = Array.from(selectedJobs.keys());
+    if (!ids.length){ Toast.open({ title:'Select jobs first', variant:'warning' }); return; }
     try{
-      const json = await fetch(url).then(r=>r.json());
-      if (!json.overlayEquity?.length) {
-        Toast.open({ title:'No equity artifact', variant:'warning' });
-        return;
+      const res = await fetch(`/analytics?overlay_job_ids=${ids.join(',')}`);
+      const json = await res.json();
+      const items = json.overlayEquities || [];
+      const stats = json.overlayStatsByJobId || {};
+      const missing = ids.filter(id => !items.find(it => it.jobId === id));
+      if (items.length){
+        window.dispatchEvent(new CustomEvent('analytics:overlays', { detail:{ items, stats } }));
+        renderStats(stats);
+        Toast.open({ title:'Overlays applied', variant:'success' });
       }
-      window.dispatchEvent(new CustomEvent('analytics:overlay', { detail: { job: selectedJob, overlay: json.overlayEquity, stats: json.overlayStats }}));
-      renderStats(json.overlayStats);
-      Toast.open({ title:`Overlay applied (#${selectedJob.id})`, variant:'success' });
+      if (missing.length){
+        Toast.open({ title:`No equity for jobs: ${missing.join(', ')}`, variant:'warning' });
+      }
     }catch(e){
-      Toast.open({ title:'Apply overlay failed', description: e.message, variant:'error' });
+      Toast.open({ title:'Apply failed', description:e.message, variant:'error' });
     }
   }
 
-  function renderStats(s){
-    if (!s){ box.stats.innerHTML=''; return; }
-    const fmtPct = v => (v==null? '-': (v*100).toFixed(2)+'%');
-    box.stats.innerHTML = `
-      <div class="card" style="padding:8px;border:1px solid #222;border-radius:10px"><div>Return</div><b>${fmtPct(s.return)}</b></div>
-      <div class="card" style="padding:8px;border:1px solid #222;border-radius:10px"><div>Max DD</div><b>${fmtPct(s.maxDD)}</b></div>
-    `;
-  }
-
-  function clearOverlay(){
+  function clearAll(){
+    selectedJobs.clear();
+    box.jobs.querySelectorAll('input[type=checkbox]').forEach(chk => { chk.checked = false; });
+    box.stats.innerHTML = '';
     window.dispatchEvent(new CustomEvent('analytics:overlay:clear'));
-    box.stats.innerHTML='';
-    Toast.open({ title:'Overlay cleared', variant:'info' });
+    Toast.open({ title:'Overlays cleared', variant:'info' });
   }
 
-  function syncPeriod(){
-    if (!selectedJob){ Toast.open({ title:'Pick a job first', variant:'warning' }); return; }
-    // Heuristika: pasiimti equity artefaktą ir nustatyti from/to pagal pirmą/paskutinį tašką
-    fetch(`/analytics/job/${selectedJob.id}/equity`).then(r=>r.json()).then(({ equity })=>{
-      if (!equity?.length){ Toast.open({ title:'No equity for sync', variant:'warning' }); return; }
-      const from = equity[0].ts, to = equity[equity.length-1].ts;
-      window.dispatchEvent(new CustomEvent('analytics:period:set', { detail:{ from, to } }));
-      Toast.open({ title:'Period synced to job', variant:'success' });
-    }).catch(e=> Toast.open({ title:'Sync failed', description:e.message, variant:'error' }));
+  function exportCsv(){
+    const ids = Array.from(selectedJobs.keys());
+    if (!ids.length){ Toast.open({ title:'Select jobs first', variant:'warning' }); return; }
+    window.open(`/analytics/overlays.csv?job_ids=${ids.join(',')}`, '_blank');
   }
 
   btn.load.addEventListener('click', loadJobs);
-  btn.apply.addEventListener('click', applyOverlay);
-  btn.clear.addEventListener('click', clearOverlay);
-  btn.sync.addEventListener('click', syncPeriod);
+  btn.apply.addEventListener('click', applyOverlays);
+  btn.clear.addEventListener('click', clearAll);
+  btn.export.addEventListener('click', exportCsv);
 
-  // Auto-refresh gavus naują succeeded job’ą (jei atidarytas šis tab’as)
+  // Auto-refresh on new succeeded job
   const es = new EventSource('/jobs/stream');
   es.onmessage = (e)=>{
     const m = JSON.parse(e.data);
     if (m?.job?.status === 'succeeded'){
       loadJobs();
       const id = Toast.open({ title:`Job #${m.job.id} finished`, variant:'success', actions:[{id:'apply',label:'Apply'}] });
-      const on = (ev)=> {
+      const on = (ev)=>{
         if (ev.detail?.id===id && ev.detail.actionId==='apply'){
           Toast.close(id);
-          selectedJob = { id: m.job.id, artifacts: [] };
-          applyOverlay();
+          selectedJobs.clear();
+          selectedJobs.set(m.job.id, { id: m.job.id, artifacts: [] });
+          applyOverlays();
           window.removeEventListener('toast:action', on);
         }
       };
