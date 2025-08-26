@@ -65,9 +65,13 @@
     const old = navEl.querySelector(`#${JSONLD_ID}`);
     if (old) old.remove();
 
+    // === UI v1.2.1 canonical base ===
+    const canonicalHref = document.querySelector('link[rel="canonical"]')?.href;
     const baseAttr = navEl.getAttribute('data-bc-base');
     if (baseAttr === 'disable') return;
-    const base = baseAttr || location.origin;
+    const base = (baseAttr && baseAttr !== 'disable')
+      ? baseAttr
+      : (canonicalHref || document.baseURI || location.origin);
     const list = navEl.querySelector(SEL_LIST);
     if (!list) return;
 

@@ -4,3 +4,25 @@
 .breadcrumbs__sep{opacity:.5}
 .breadcrumbs__current{color:#e6e6e6}
 @media (max-width:768px){.breadcrumbs{top:56px;flex-wrap:wrap}}
+
+/* === UI v1.2.1 sticky breadcrumbs + truncation === */
+.ui-breadcrumbs {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(6px);
+}
+.ui-breadcrumbs .ui-breadcrumbs-list {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  overflow: auto;
+  white-space: nowrap;
+  padding: .25rem 0;
+}
+.ui-breadcrumbs a,
+.ui-breadcrumbs li[aria-current] {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 24ch;
+}
