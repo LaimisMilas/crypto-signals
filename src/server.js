@@ -20,8 +20,14 @@ import { jobsRoutes } from './routes/jobs.js';
 import binanceRoutes from './integrations/binance/routes.js';
 import healthRoutes from './routes/health.js';
 import analyticsJobsRoutes from './routes/analytics.jobs.js';
+import './observability/otel.js';
+import httpLogger from './observability/http-logger.js';
+import logger from './observability/logger.js';
 import analyticsOverlaysCsvRoutes from './routes/analytics.overlays.csv.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
+
+process.on('uncaughtException', e => logger.error({ err: e }, 'uncaughtException'));
+process.on('unhandledRejection', e => logger.error({ err: e }, 'unhandledRejection'));
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'client', 'public');
@@ -30,6 +36,7 @@ const app = express();
 const pool = db;
 
 
+app.use(httpLogger);
 app.use(cors());
 app.use(cookieParser());
 
@@ -561,6 +568,12 @@ app.get('/analytics/trades.csv', async (req, res) => {
 // Static files
 app.use(express.static(publicDir));
 
+// Central error handler
+app.use((err, req, res, _next) => {
+  logger.error({ err, reqId: req.id }, 'unhandled_error');
+  res.status(500).json({ error: 'Internal Server Error', reqId: req.id });
+});
+
 // 404 fallback for any unmatched request
 app.use((req, res) => {
   res.status(404).sendFile(path.join(publicDir, '404.html'));
@@ -568,7 +581,7 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on :${PORT}`);
+  logger.info(`Server running on :${PORT}`);
 });
 
 if (process.env.ENABLE_JOB_WORKER === 'true') {
