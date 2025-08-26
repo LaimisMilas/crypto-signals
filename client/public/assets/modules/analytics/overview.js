@@ -16,6 +16,18 @@ export async function mount(root){
   });
   const COLORS = ['#4cc9f0','#ffd166','#06d6a0','#ef476f','#118ab2'];
   const colorOf = (jobId) => COLORS[jobId % COLORS.length];
+  let originalBaseline = null;
+  let currentSettings = { align:'none', rebase:null };
+
+  function labelWithDelta(name, s, base){
+    if (!base) return name;
+    const ret = s.equity.at(-1).equity / s.equity[0].equity - 1;
+    const bret = base.equity.at(-1).equity / base.equity[0].equity - 1;
+    let peak=-Infinity, dd=0; s.equity.forEach(p=>{ peak=Math.max(peak,p.equity); dd=Math.min(dd, p.equity/peak-1); });
+    let bpk=-Infinity, bdd=0; base.equity.forEach(p=>{ bpk=Math.max(bpk,p.equity); bdd=Math.min(bdd, p.equity/bpk-1); });
+    const dR = (ret - bret)*100, dD = (dd - bdd)*100;
+    return `${name} (ΔR ${dR.toFixed(1)}pp / ΔDD ${dD.toFixed(1)}pp)`;
+  }
 
   function alignAndRebase(series, baseline, settings){
     const { align, rebase } = settings || {};
@@ -42,8 +54,10 @@ export async function mount(root){
 
   function render(detail){
     const { items = [], baseline = null, settings = {} } = detail;
+    originalBaseline = baseline ? { ...baseline, equity: [...baseline.equity] } : null;
+    currentSettings = { align: settings.align || 'none', rebase: settings.rebase || null };
     const itemsCopy = items.map(it => ({ ...it, equity: [...it.equity] }));
-    const baseCopy = baseline ? { ...baseline, equity: [...baseline.equity] } : null;
+    const baseCopy = originalBaseline ? { ...originalBaseline, equity: [...originalBaseline.equity] } : null;
     const { series, baseline: base } = alignAndRebase(itemsCopy, baseCopy, settings);
     chart.data.datasets = [];
     if (base){
@@ -58,7 +72,7 @@ export async function mount(root){
     }
     for (const it of series){
       chart.data.datasets.push({
-        label: `Overlay ${it.jobId}`,
+        label: labelWithDelta(it.label || `Overlay ${it.jobId}`, it, base),
         data: it.equity.map(p => ({ x:p.ts, y:p.equity })),
         borderDash: [6,4],
         borderWidth: 2,
@@ -71,27 +85,46 @@ export async function mount(root){
   }
 
   const onOverlays = e => render(e.detail);
+  const onInline = e => {
+    const { items = [] } = e.detail || {};
+    const itemsCopy = items.map(it => ({ ...it, equity: [...it.equity] }));
+    const baseCopy = originalBaseline ? { ...originalBaseline, equity: [...originalBaseline.equity] } : null;
+    const { series, baseline: base } = alignAndRebase(itemsCopy, baseCopy, currentSettings);
+    const offset = chart.data.datasets.length;
+    series.forEach((it, idx) => {
+      chart.data.datasets.push({
+        label: labelWithDelta(it.label || `Inline ${idx+1}`, it, base),
+        data: it.equity.map(p => ({ x:p.ts, y:p.equity })),
+        borderDash: [2,3],
+        borderWidth: 2,
+        pointRadius: 0,
+        borderColor: COLORS[(offset + idx) % COLORS.length],
+        meta: { type:'inline' }
+      });
+    });
+    chart.update('none');
+  };
   const onClear = () => {
-    chart.data.datasets = chart.data.datasets.filter(d => !d.meta || (d.meta.type !== 'overlay' && d.meta.type !== 'baseline'));
+    chart.data.datasets = chart.data.datasets.filter(d => !d.meta || (d.meta.type !== 'overlay' && d.meta.type !== 'baseline' && d.meta.type !== 'inline'));
     chart.update('none');
   };
   window.addEventListener('analytics:overlays:v2', onOverlays);
+  window.addEventListener('analytics:overlays:inline', onInline);
   window.addEventListener('analytics:overlay:clear', onClear);
 
   btn.addEventListener('click', () => {
     const url = chart.toBase64Image();
-    const w = window.open();
-    if (w){
-      const img = new Image();
-      img.src = url;
-      w.document.body.appendChild(img);
-    }
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'analytics-overlays.png';
+    a.click();
   });
 
   return {
     unmount(){
       try { chart.destroy(); } catch { /* ignore */ }
       window.removeEventListener('analytics:overlays:v2', onOverlays);
+      window.removeEventListener('analytics:overlays:inline', onInline);
       window.removeEventListener('analytics:overlay:clear', onClear);
       root.innerHTML = '';
     }

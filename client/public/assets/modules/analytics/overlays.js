@@ -18,7 +18,9 @@ export async function mount(root){
     </div>
     <div style="margin-top:12px;display:flex;gap:8px;align-items:end;flex-wrap:wrap">
       <div><label>Optimize job ID<br><input id="ov-top-id" style="width:100px"></label></div>
-      <div><label>N<br><input id="ov-top-n" type="number" min="1" max="10" value="3" style="width:60px"></label></div>
+      <div><label>N<br><input id="ov-top-n" type="number" min="1" max="5" value="3" style="width:60px"></label></div>
+      <div><label>Smooth/Downsample<br><input id="ov-tol" type="range" min="0" max="5" step="1" value="0"></label></div>
+      <button id="ov-top-inline" class="btn">Load TOP-N (inline)</button>
       <button id="ov-top-load" class="btn">Load TOP-N</button>
     </div>
     <div id="ov-jobs" style="margin-top:12px"></div>
@@ -27,8 +29,8 @@ export async function mount(root){
   `;
 
   const el = id => root.querySelector(id);
-  const input = { type: el('#ov-type'), symbol: el('#ov-symbol'), strategy: el('#ov-strategy'), topId: el('#ov-top-id'), topN: el('#ov-top-n') };
-  const btn = { load: el('#ov-load'), apply: el('#ov-apply'), clear: el('#ov-clear'), export: el('#ov-export'), share: el('#ov-share'), topLoad: el('#ov-top-load') };
+  const input = { type: el('#ov-type'), symbol: el('#ov-symbol'), strategy: el('#ov-strategy'), topId: el('#ov-top-id'), topN: el('#ov-top-n'), tol: el('#ov-tol') };
+  const btn = { load: el('#ov-load'), apply: el('#ov-apply'), clear: el('#ov-clear'), export: el('#ov-export'), share: el('#ov-share'), topLoad: el('#ov-top-load'), topInline: el('#ov-top-inline') };
   const box = { jobs: el('#ov-jobs'), stats: el('#ov-stats'), top: el('#ov-top-results') };
   const chkBaseline = el('#ov-baseline');
   const selectAlign = el('#ov-align');
@@ -91,28 +93,45 @@ export async function mount(root){
     });
   }
 
-  function renderStats(stats){
+  function renderStats(stats, baseline){
     if (!stats || !selectedJobs.size){ box.stats.innerHTML=''; return; }
     const ids = Array.from(selectedJobs.keys());
-    const baselineId = ids[0];
-    const base = stats[baselineId] || { return:0, maxDD:0 };
     const fmtPct = v => (v==null? '-': (v*100).toFixed(2)+'%');
+
+    let baseReturn = 0;
+    let baseMaxDD = 0;
+    if (baseline && baseline.equity?.length){
+      const eq = baseline.equity;
+      baseReturn = eq.at(-1).equity / eq[0].equity - 1;
+      let peak = -Infinity;
+      eq.forEach(p => { peak = Math.max(peak, p.equity); baseMaxDD = Math.min(baseMaxDD, (p.equity / peak - 1)); });
+    }else{
+      const baseId = ids[0];
+      const base = stats[baseId] || { return:0, maxDD:0 };
+      baseReturn = base.return || 0;
+      baseMaxDD = base.maxDD || 0;
+    }
+
     const rows = ids.map(id => {
       const j = selectedJobs.get(id) || {};
       const s = stats[id] || {};
       const pf = j.result?.profitFactor;
+      const dR = baseline ? s.deltaReturn : (s.return - baseReturn);
+      const dD = baseline ? s.deltaMaxDD : (s.maxDD - baseMaxDD);
       return `<tr>
         <td><span style="display:inline-block;width:10px;height:10px;background:${colorOf(id)};margin-right:4px"></span>#${id}</td>
         <td>${j.type||''}</td>
         <td>${j.params?.symbol||'-'}</td>
         <td>${fmtPct(s.return)}</td>
-        <td>${fmtPct(s.return - base.return)}</td>
+        <td>${fmtPct(dR)}</td>
         <td>${fmtPct(s.maxDD)}</td>
-        <td>${fmtPct(s.maxDD - base.maxDD)}</td>
+        <td>${fmtPct(dD)}</td>
         <td>${pf ?? '-'}</td>
       </tr>`;
     }).join('');
-    box.stats.innerHTML = `<table class="table"><thead><tr><th>Job</th><th>Type</th><th>Symbol</th><th>Return</th><th>ΔReturn</th><th>MaxDD</th><th>ΔMaxDD</th><th>PF</th></tr></thead><tbody>${rows}</tbody></table>`;
+    const deltaRetLabel = baseline ? 'ΔReturn vs Baseline' : 'ΔReturn';
+    const deltaDdLabel = baseline ? 'ΔMaxDD vs Baseline' : 'ΔMaxDD';
+    box.stats.innerHTML = `<table class="table"><thead><tr><th>Job</th><th>Type</th><th>Symbol</th><th>Return</th><th>${deltaRetLabel}</th><th>MaxDD</th><th>${deltaDdLabel}</th><th>PF</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
   async function applyOverlays(){
@@ -134,7 +153,7 @@ export async function mount(root){
       const missing = ids.filter(id => !items.find(it => it.jobId === id));
       if (items.length){
         window.dispatchEvent(new CustomEvent('analytics:overlays:v2', { detail:{ items, baseline: baselineObj, settings:{ align, rebase: rebase || null } } }));
-        renderStats(stats);
+        renderStats(stats, baselineObj);
         Toast.open({ title:'Overlays applied', variant:'success' });
       }
       if (missing.length){
@@ -205,12 +224,31 @@ export async function mount(root){
     }
   }
 
+  async function loadTopNInline(){
+    const id = Number(input.topId.value);
+    const n = Number(input.topN.value) || 3;
+    const tol = Number(input.tol.value) || 0;
+    if (!id){ Toast.open({ title:'Optimize job ID required', variant:'warning' }); return; }
+    try {
+      const json = await fetch(`/analytics/optimize/${id}/inline-overlays?n=${n}&tol=${tol}`).then(r=>r.json());
+      if (!json.items?.length){
+        Toast.open({ title:'No inline overlays', variant:'warning' });
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('analytics:overlays:inline', { detail:{ items: json.items } }));
+      Toast.open({ title:`Loaded TOP-${json.items.length} inline`, variant:'success' });
+    } catch (e) {
+      Toast.open({ title:'Load inline failed', description:e.message, variant:'error' });
+    }
+  }
+
   btn.load.addEventListener('click', loadJobs);
   btn.apply.addEventListener('click', applyOverlays);
   btn.clear.addEventListener('click', clearAll);
   btn.export.addEventListener('click', exportCsv);
   btn.share.addEventListener('click', shareUrl);
   btn.topLoad.addEventListener('click', loadTopN);
+  btn.topInline.addEventListener('click', loadTopNInline);
 
   // Auto-refresh on new succeeded job
   const es = new EventSource('/jobs/stream');

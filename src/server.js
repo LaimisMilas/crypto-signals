@@ -32,6 +32,7 @@ import { sseRoutes } from './routes/sse.js';
 import analyticsOverlaysCsvRoutes from './routes/analytics.overlays.csv.js';
 import analyticsOverlayShareRoutes from './routes/analytics.overlay.share.js';
 import analyticsOptimizeTopRoutes from './routes/analytics.optimize.top.js';
+import analyticsOptimizeInlineRoutes from './routes/analytics.optimize.inline.js';
 import analyticsOverlayRoutes from './routes/analytics-overlay.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
 
@@ -74,6 +75,7 @@ app.use('/', analyticsJobsRoutes);
   app.use('/', analyticsOverlaysCsvRoutes);
   app.use('/', analyticsOverlayShareRoutes);
   app.use('/', analyticsOptimizeTopRoutes);
+  app.use('/', analyticsOptimizeInlineRoutes);
   app.use('/', analyticsOverlayRoutes);
   sseRoutes(app);
   metricsRouter(app);
@@ -460,6 +462,7 @@ app.get('/analytics', async (req, res) => {
   const overlayAlign = req.query.overlay_align === 'first-common' ? 'first-common' : 'none';
   const overlayRebase = req.query.overlay_rebase ? Number(req.query.overlay_rebase) : null;
   let baselineObj = null;
+  let baselineStats = null;
   if (overlayJobIds.length) {
     overlayEquities = [];
     overlayStatsByJobId = {};
@@ -491,6 +494,16 @@ app.get('/analytics', async (req, res) => {
 
   if (baselineOpt === 'live') {
     baselineObj = { type: 'live', equity };
+    if (equity.length) {
+      const bret = equity.at(-1).equity / equity[0].equity - 1;
+      let bpk = -Infinity;
+      let bdd = 0;
+      equity.forEach(p => {
+        bpk = Math.max(bpk, p.equity);
+        bdd = Math.min(bdd, (p.equity / bpk - 1));
+      });
+      baselineStats = { return: bret, maxDD: bdd };
+    }
   }
 
   let alignHint = null;
@@ -503,6 +516,16 @@ app.get('/analytics', async (req, res) => {
       const candidates = [...sets[0]].sort((a, b) => a - b);
       for (const t of candidates) {
         if (sets.every(S => S.has(t))) { alignHint = t; break; }
+      }
+    }
+  }
+
+  if (baselineStats && overlayEquities && overlayEquities.length) {
+    for (const { jobId } of overlayEquities) {
+      const s = overlayStatsByJobId[jobId];
+      if (s) {
+        s.deltaReturn = s.return - baselineStats.return;
+        s.deltaMaxDD = s.maxDD - baselineStats.maxDD;
       }
     }
   }
