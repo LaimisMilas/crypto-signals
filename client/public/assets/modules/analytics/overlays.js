@@ -7,24 +7,38 @@ export async function mount(root){
       <div><label>Type<br><select id="ov-type"><option value="">Any</option><option>backtest</option><option>optimize</option><option>walkforward</option></select></label></div>
       <div><label>Symbol<br><input id="ov-symbol" placeholder="e.g. BTCUSDT"></label></div>
       <div><label>Strategy<br><input id="ov-strategy" placeholder="e.g. ema"></label></div>
+      <div><label><input type="checkbox" id="ov-baseline"> Use Live as baseline</label></div>
+      <div><label>Align<br><select id="ov-align"><option value="none">none</option><option value="first-common">first-common</option></select></label></div>
+      <div><label>Rebase to<br><select id="ov-rebase"><option value="">—</option><option value="100">100</option></select></label></div>
       <button id="ov-load" class="btn">Load jobs</button>
       <button id="ov-apply" class="btn">Apply overlays</button>
       <button id="ov-clear" class="btn">Clear all</button>
       <button id="ov-export" class="btn">Export CSV</button>
+      <button id="ov-share" class="btn">Share URL</button>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+      <div><label>Optimize job ID<br><input id="ov-top-id" style="width:100px"></label></div>
+      <div><label>N<br><input id="ov-top-n" type="number" min="1" max="10" value="3" style="width:60px"></label></div>
+      <button id="ov-top-load" class="btn">Load TOP-N</button>
     </div>
     <div id="ov-jobs" style="margin-top:12px"></div>
     <div id="ov-stats" style="margin-top:12px"></div>
+    <div id="ov-top-results" style="margin-top:12px"></div>
   `;
 
   const el = id => root.querySelector(id);
-  const input = { type: el('#ov-type'), symbol: el('#ov-symbol'), strategy: el('#ov-strategy') };
-  const btn = { load: el('#ov-load'), apply: el('#ov-apply'), clear: el('#ov-clear'), export: el('#ov-export') };
-  const box = { jobs: el('#ov-jobs'), stats: el('#ov-stats') };
+  const input = { type: el('#ov-type'), symbol: el('#ov-symbol'), strategy: el('#ov-strategy'), topId: el('#ov-top-id'), topN: el('#ov-top-n') };
+  const btn = { load: el('#ov-load'), apply: el('#ov-apply'), clear: el('#ov-clear'), export: el('#ov-export'), share: el('#ov-share'), topLoad: el('#ov-top-load') };
+  const box = { jobs: el('#ov-jobs'), stats: el('#ov-stats'), top: el('#ov-top-results') };
+  const chkBaseline = el('#ov-baseline');
+  const selectAlign = el('#ov-align');
+  const selectRebase = el('#ov-rebase');
 
   const COLORS = ['#4cc9f0','#ffd166','#06d6a0','#ef476f','#118ab2'];
   const colorOf = (jobId) => COLORS[jobId % COLORS.length];
 
   const selectedJobs = new Map();
+  const queuedJobIds = new Set();
   let jobs = [];
 
   async function loadJobs(){
@@ -104,14 +118,22 @@ export async function mount(root){
   async function applyOverlays(){
     const ids = Array.from(selectedJobs.keys());
     if (!ids.length){ Toast.open({ title:'Select jobs first', variant:'warning' }); return; }
+    const baseline = chkBaseline.checked ? 'live' : 'none';
+    const align = selectAlign.value;
+    const rebase = selectRebase.value;
     try{
-      const res = await fetch(`/analytics?overlay_job_ids=${ids.join(',')}`);
+      const params = new URLSearchParams();
+      params.set('overlay_job_ids', ids.join(','));
+      if (baseline !== 'none') params.set('baseline', baseline);
+      if (align !== 'none') params.set('overlay_align', align);
+      const res = await fetch(`/analytics?${params.toString()}`);
       const json = await res.json();
       const items = json.overlayEquities || [];
       const stats = json.overlayStatsByJobId || {};
+      const baselineObj = json.baseline || null;
       const missing = ids.filter(id => !items.find(it => it.jobId === id));
       if (items.length){
-        window.dispatchEvent(new CustomEvent('analytics:overlays', { detail:{ items, stats } }));
+        window.dispatchEvent(new CustomEvent('analytics:overlays:v2', { detail:{ items, baseline: baselineObj, settings:{ align, rebase: rebase || null } } }));
         renderStats(stats);
         Toast.open({ title:'Overlays applied', variant:'success' });
       }
@@ -137,10 +159,58 @@ export async function mount(root){
     window.open(`/analytics/overlays.csv?job_ids=${ids.join(',')}`, '_blank');
   }
 
+  async function shareUrl(){
+    const jobIds = Array.from(selectedJobs.keys());
+    if (!jobIds.length){ Toast.open({ title:'Select jobs first', variant:'warning' }); return; }
+    try{
+      const res = await fetch('/analytics/overlays/share', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ jobIds, baseline: chkBaseline.checked ? 'live' : 'none', align: selectAlign.value, rebase: selectRebase.value || null })
+      });
+      const json = await res.json();
+      const fullUrl = location.origin + json.url;
+      await navigator.clipboard.writeText(fullUrl);
+      Toast.open({ title:'URL copied', variant:'success' });
+    }catch(e){
+      Toast.open({ title:'Share failed', description:e.message, variant:'error' });
+    }
+  }
+
+  async function loadTopN(){
+    const jobId = Number(input.topId.value);
+    const n = Number(input.topN.value) || 3;
+    if (!jobId){ Toast.open({ title:'Optimize job ID required', variant:'warning' }); return; }
+    try{
+      const res = await fetch(`/analytics/optimize/${jobId}/top?n=${n}`);
+      const json = await res.json();
+      const rows = json.top || [];
+      if (!rows.length){ box.top.innerHTML = '<div style="opacity:.7">No results</div>'; return; }
+      box.top.innerHTML = `<table class="table"><thead><tr><th>#</th><th>Score</th><th>Params</th><th></th></tr></thead><tbody>${rows.map((r,i)=>{ const score = r.cagr ?? r.return ?? r.pf ?? ''; const params = Object.entries(r).filter(([k])=>!['cagr','return','pf','profitFactor','maxDD'].includes(k)).map(([k,v])=>`${k}=${v}`).join(' '); return `<tr><td>${i+1}</td><td>${score}</td><td style="font-size:12px">${params}</td><td><button data-idx="${i}" class="btn btn-xs">Queue backtest</button></td></tr>`; }).join('')}</tbody></table>`;
+      box.top.querySelectorAll('button[data-idx]').forEach(btn=>{
+        btn.addEventListener('click', async () => {
+          const params = rows[Number(btn.dataset.idx)];
+          try{
+            const r = await fetch('/jobs', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type:'backtest', params }) });
+            const j = await r.json();
+            queuedJobIds.add(j.id);
+            Toast.open({ title:`Backtest queued #${j.id}`, variant:'success' });
+          }catch(e){
+            Toast.open({ title:'Queue failed', description:e.message, variant:'error' });
+          }
+        });
+      });
+    }catch(e){
+      Toast.open({ title:'Load TOP-N failed', description:e.message, variant:'error' });
+    }
+  }
+
   btn.load.addEventListener('click', loadJobs);
   btn.apply.addEventListener('click', applyOverlays);
   btn.clear.addEventListener('click', clearAll);
   btn.export.addEventListener('click', exportCsv);
+  btn.share.addEventListener('click', shareUrl);
+  btn.topLoad.addEventListener('click', loadTopN);
 
   // Auto-refresh on new succeeded job
   const es = new EventSource('/jobs/stream');
@@ -148,19 +218,47 @@ export async function mount(root){
     const m = JSON.parse(e.data);
     if (m?.job?.status === 'succeeded'){
       loadJobs();
-      const id = Toast.open({ title:`Job #${m.job.id} finished`, variant:'success', actions:[{id:'apply',label:'Apply'}] });
-      const on = (ev)=>{
-        if (ev.detail?.id===id && ev.detail.actionId==='apply'){
-          Toast.close(id);
-          selectedJobs.clear();
-          selectedJobs.set(m.job.id, { id: m.job.id, artifacts: [] });
-          applyOverlays();
-          window.removeEventListener('toast:action', on);
-        }
-      };
-      window.addEventListener('toast:action', on);
+      if (queuedJobIds.has(m.job.id)){
+        selectedJobs.set(m.job.id, { id: m.job.id, artifacts: [] });
+        queuedJobIds.delete(m.job.id);
+        applyOverlays();
+        Toast.open({ title:`Job #${m.job.id} finished`, variant:'success' });
+      }else{
+        const id = Toast.open({ title:`Job #${m.job.id} finished`, variant:'success', actions:[{id:'apply',label:'Apply'}] });
+        const on = (ev)=>{
+          if (ev.detail?.id===id && ev.detail.actionId==='apply'){
+            Toast.close(id);
+            selectedJobs.clear();
+            selectedJobs.set(m.job.id, { id: m.job.id, artifacts: [] });
+            applyOverlays();
+            window.removeEventListener('toast:action', on);
+          }
+        };
+        window.addEventListener('toast:action', on);
+      }
     }
   };
+
+  const shareToken = new URLSearchParams(location.search).get('share');
+  if (shareToken){
+    try{
+      const res = await fetch(`/analytics/overlays/share/${shareToken}`);
+      const payload = await res.json();
+      chkBaseline.checked = payload.baseline === 'live';
+      selectAlign.value = payload.align || 'none';
+      selectRebase.value = payload.rebase ? String(payload.rebase) : '';
+      await loadJobs();
+      selectedJobs.clear();
+      (payload.jobIds || []).forEach(id => {
+        const job = jobs.find(j => j.id === id);
+        if (job) selectedJobs.set(id, job); else selectedJobs.set(id, { id, artifacts: [] });
+      });
+      renderJobs();
+      applyOverlays();
+    }catch(e){
+      Toast.open({ title:'Share load failed', description:e.message, variant:'error' });
+    }
+  }
 
   return { unmount(){ try{ es.close(); }catch(e){ /* ignore */ } } };
 }

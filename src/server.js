@@ -31,6 +31,8 @@ import { errorHandler } from './middleware/error-handler.js';
 import { metricsRouter, httpRequests, httpDuration } from './observability/metrics.js';
 import { sseRouter } from './routes/sse.js';
 import analyticsOverlaysCsvRoutes from './routes/analytics.overlays.csv.js';
+import analyticsOverlayShareRoutes from './routes/analytics.overlay.share.js';
+import analyticsOptimizeTopRoutes from './routes/analytics.optimize.top.js';
 import analyticsOverlayRoutes from './routes/analytics-overlay.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
 
@@ -78,6 +80,8 @@ app.use(bodyParser.json());
   app.use('/', healthRoutes);
   app.use('/', analyticsJobsRoutes);
   app.use('/', analyticsOverlaysCsvRoutes);
+  app.use('/', analyticsOverlayShareRoutes);
+  app.use('/', analyticsOptimizeTopRoutes);
   app.use('/', analyticsOverlayRoutes);
   app.use(sseRouter);
   metricsRouter(app);
@@ -460,6 +464,10 @@ app.get('/analytics', async (req, res) => {
     .map(s => Number(s.trim()))
     .filter(Boolean)
     .slice(0, 5);
+  const baselineOpt = req.query.baseline === 'live' ? 'live' : 'none';
+  const overlayAlign = req.query.overlay_align === 'first-common' ? 'first-common' : 'none';
+  const overlayRebase = req.query.overlay_rebase ? Number(req.query.overlay_rebase) : null;
+  let baselineObj = null;
   if (overlayJobIds.length) {
     overlayEquities = [];
     overlayStatsByJobId = {};
@@ -489,6 +497,24 @@ app.get('/analytics', async (req, res) => {
     }
   }
 
+  if (baselineOpt === 'live') {
+    baselineObj = { type: 'live', equity };
+  }
+
+  let alignHint = null;
+  if (overlayAlign === 'first-common') {
+    const series = [];
+    if (baselineObj) series.push(baselineObj.equity);
+    if (overlayEquities) overlayEquities.forEach(s => series.push(s.equity));
+    if (series.length > 1) {
+      const sets = series.map(s => new Set(s.map(p => p.ts)));
+      const candidates = [...sets[0]].sort((a, b) => a - b);
+      for (const t of candidates) {
+        if (sets.every(S => S.has(t))) { alignHint = t; break; }
+      }
+    }
+  }
+
   const overlayEquity = overlayEquities?.[0]?.equity || null;
   const overlayStats = overlayJobIds.length === 1 ? (overlayStatsByJobId?.[overlayJobIds[0]] || null) : null;
 
@@ -508,6 +534,8 @@ app.get('/analytics', async (req, res) => {
     overlayStats,
     overlayEquities,
     overlayStatsByJobId,
+    baseline: baselineObj,
+    alignHint,
     csv: {
       backtest: `/analytics/backtest.csv${qs ? `?${qs}` : ''}`,
       optimize: `/analytics/optimize.csv${qs ? `?${qs}` : ''}`,
