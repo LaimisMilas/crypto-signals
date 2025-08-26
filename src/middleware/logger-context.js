@@ -1,6 +1,6 @@
-import logger from '../observability/logger.js';
+import logger from '../logger.js';
 
-export function loggerContextMiddleware(req, res, next) {
-  req.log = logger.child({ reqId: req.reqId, path: req.path, method: req.method });
+export function loggerContext(req, _res, next) {
+  req.log = logger.child({ reqId: req.reqId, method: req.method, path: req.path });
   next();
 }

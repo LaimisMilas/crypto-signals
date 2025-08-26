@@ -1,0 +1,40 @@
+groups:
+- name: api.rules
+  rules:
+  - alert: HighErrorRate
+    expr: sum(rate(http_requests_total{status=~"5.."}[5m])) \
+          / sum(rate(http_requests_total[5m])) > 0.05
+    for: 10m
+    labels: { severity: page }
+    annotations:
+      summary: "API 5xx >5% (10m)"
+  - alert: SlowRequests
+    expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1
+    for: 10m
+    labels: { severity: ticket }
+    annotations:
+      summary: "p95 > 1s (10m)"
+
+- name: sse.rules
+  rules:
+  - alert: NoSSEClients
+    expr: sse_connections == 0
+    for: 15m
+    labels: { severity: ticket }
+    annotations:
+      summary: "Nėra aktyvių SSE klientų 15 min"
+  - alert: SSENotEmitting
+    expr: rate(sse_events_sent_total[10m]) == 0 and sse_connections > 0
+    for: 10m
+    labels: { severity: page }
+    annotations:
+      summary: "SSE nepristato event’ų"
+      
+- name: jobs.rules
+  rules:
+  - alert: JobsFailing
+    expr: rate(job_duration_seconds_count{status="err"}[15m]) > 0
+    for: 15m
+    labels: { severity: ticket }
+    annotations:
+      summary: "Job’ai fail’inasi"

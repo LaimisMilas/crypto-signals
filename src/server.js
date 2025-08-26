@@ -1,3 +1,5 @@
+import app from './app.js';
+import { startOtel } from './otel.js';
 import fs from 'fs/promises';
 import express from 'express';
 import path from 'path';
@@ -31,9 +33,13 @@ import { sseRouter } from './routes/sse.js';
 import analyticsOverlaysCsvRoutes from './routes/analytics.overlays.csv.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
 
-process.on('uncaughtException', e => logger.error({ err: e }, 'uncaughtException'));
-process.on('unhandledRejection', e => logger.error({ err: e }, 'unhandledRejection'));
+const port = process.env.PORT || 3000;
 
+async function start() {
+  await startOtel();
+  app.listen(port, () => {
+    console.log(`listening on ${port}`);
+  });
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'client', 'public');
 const app = express();
@@ -599,3 +605,5 @@ app.listen(PORT, () => {
 if (process.env.ENABLE_JOB_WORKER === 'true') {
   import('./jobs/worker.js').then(m => m.startWorker());
 }
+
+start();

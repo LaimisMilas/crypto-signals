@@ -8,9 +8,11 @@
   },
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node src/server.js",
+    "dev": "node --require ./src/otel-preload.cjs src/server.js",
     "lint": "eslint .",
     "test": "node ./scripts/run-tests.js",
+    "test:observ": "node scripts/smoke-observ.js",
+    "k6:http": "k6 run tests/k6/http-smoke.js",
     "build": "echo \"(optional) build step for FE bundling\"",
     "migrate": "node src/migrate.js",
     "backtest": "node src/engine/backtest.js",
@@ -42,7 +44,8 @@
     "pino-http": "^10.5.0",
     "prom-client": "^15.1.3",
     "stripe": "^16.6.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "prom-client": "^14.2.0"
   },
   "devDependencies": {
     "eslint": "^8.56.0"
