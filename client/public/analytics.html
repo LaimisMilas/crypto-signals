@@ -18,6 +18,7 @@
         <button role="tab" id="tab-overview" data-tab="overview" aria-selected="true">Overview</button>
         <button role="tab" id="tab-pva"      data-tab="pva">Plan vs Actual</button>
         <button role="tab" id="tab-trades"   data-tab="trades">Trades</button>
+        <button role="tab" id="tab-overlays" data-tab="overlays">Overlays</button>
         <button role="tab" id="tab-csv"      data-tab="csv">CSV</button>
       </div>
 
@@ -33,6 +34,9 @@
         <section role="tabpanel" id="panel-trades" data-tab-panel="trades" aria-labelledby="tab-trades" hidden
           data-lazy-module="/assets/modules/analytics/trades.js">
           <!-- trades table -->
+        </section>
+        <section role="tabpanel" id="panel-overlays" data-tab-panel="overlays" aria-labelledby="tab-overlays" hidden
+          data-lazy-module="/assets/modules/analytics/overlays.js">
         </section>
         <section role="tabpanel" id="panel-csv" data-tab-panel="csv" aria-labelledby="tab-csv" hidden
           data-lazy-module="/assets/modules/analytics/csv.js">

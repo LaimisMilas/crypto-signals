@@ -1,105 +1,58 @@
-import fs from 'fs/promises';
+import fs from 'fs';
 import path from 'path';
+import { parse } from 'csv-parse/sync';
 import { db } from '../storage/db.js';
 
-// Simple in-memory cache for parsed CSV artifacts
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const csvCache = new Map(); // key: file path -> { mtimeMs, ts, rows }
+const cache = new Map(); // key -> { data, ts, mtime }
+const TTL_MS = 10 * 60 * 1000;
 
-function parseCSV(str) {
-  const lines = str.trim().split(/\r?\n/);
-  const header = lines.shift()?.split(',').map(h => h.trim()) || [];
-  return lines.map(line => {
-    const cols = line.split(',');
-    const obj = {};
-    header.forEach((h, i) => {
-      obj[h] = (cols[i] || '').trim();
-    });
-    return obj;
-  });
-}
+function _key(jobId, p, mtimeMs){ return `${jobId}|${p}|${mtimeMs}`; }
 
-export async function listArtifacts(jobId) {
-  const q = 'SELECT id, job_id, path, mime, size FROM job_artifacts WHERE job_id=$1 ORDER BY id';
-  const { rows } = await db.query(q, [jobId]);
+export async function listArtifacts(jobId){
+  const { rows } = await db.query(
+    'SELECT id, kind, label, path, size_bytes, created_at FROM job_artifacts WHERE job_id=$1 ORDER BY created_at ASC',
+    [jobId]
+  );
   return rows;
 }
 
-export async function readArtifactCSV(filePath) {
-  const abs = path.resolve(filePath);
-  const stat = await fs.stat(abs);
-  const cached = csvCache.get(abs);
-  if (cached && cached.mtimeMs === stat.mtimeMs && (Date.now() - cached.ts) < CACHE_TTL_MS) {
-    return cached.rows;
-  }
-  const data = await fs.readFile(abs, 'utf8');
-  const rows = parseCSV(data);
-  csvCache.set(abs, { mtimeMs: stat.mtimeMs, ts: Date.now(), rows });
+function readCSVFile(filePath){
+  const text = fs.readFileSync(filePath, 'utf8');
+  return parse(text, { columns: true, skip_empty_lines: true, trim: true });
+}
+
+export async function readArtifactCSV(jobId, artifactPath){
+  const p = path.resolve(artifactPath);
+  const stat = fs.statSync(p);
+  const key = _key(jobId, p, stat.mtimeMs);
+  const hit = cache.get(key);
+  const now = Date.now();
+  if (hit && (now - hit.ts) < TTL_MS) return hit.data;
+  const rows = readCSVFile(p);
+  cache.clear(); // simple LRU imitation
+  cache.set(key, { data: rows, ts: now, mtime: stat.mtimeMs });
   return rows;
 }
 
-function parseTs(v) {
-  if (v === undefined || v === null || v === '') return null;
-  const n = Number(v);
-  if (!Number.isNaN(n)) {
-    // assume ms if large
-    if (n > 1e12) return n;
-    if (n > 1e9) return n * 1000;
-  }
-  const d = Date.parse(String(v));
-  return Number.isNaN(d) ? null : d;
-}
-
-export function normalizeEquity(rows) {
+export function normalizeEquity(rows){
   if (!rows.length) return [];
-  const cols = Object.keys(rows[0]);
-  const tsCol = cols.find(c => /^(ts|time|date)$/i.test(c)) || cols[0];
-  const eqCol = cols.find(c => /^(equity|balance)$/i.test(c)) || cols[1];
+  const timeKey = ['ts','time','date','datetime'].find(k => k in rows[0]) || 'ts';
+  const equityKey = ['equity','balance','value','pv'].find(k => k in rows[0]) || 'equity';
   return rows.map(r => ({
-    ts: parseTs(r[tsCol]),
-    equity: r[eqCol] !== undefined ? Number(r[eqCol]) : null,
-  })).filter(r => r.ts !== null && r.equity !== null);
+    ts: Number(r[timeKey] ?? r[timeKey.toLowerCase()]),
+    equity: Number(r[equityKey] ?? r[equityKey.toLowerCase()])
+  })).filter(p => Number.isFinite(p.ts) && Number.isFinite(p.equity));
 }
 
-export function normalizeTrades(rows) {
-  if (!rows.length) return [];
-  const cols = Object.keys(rows[0]);
-  const find = (patterns, def) => {
-    const re = new RegExp(patterns.join('|'), 'i');
-    return cols.find(c => re.test(c)) || def;
-  };
-  const openCol = find(['ts_open', 'open_ts', 'opened', 'open_time', 'time_open', 'entry_ts']);
-  const closeCol = find(['ts_close', 'close_ts', 'closed', 'close_time', 'time_close', 'exit_ts']);
-  const sideCol = find(['side', 'direction', 'type']);
-  const qtyCol = find(['qty', 'quantity', 'amount', 'size']);
-  const entryCol = find(['entry', 'entry_price', 'open_price', 'price_in']);
-  const exitCol = find(['exit', 'exit_price', 'close_price', 'price_out']);
-  const pnlCol = find(['pnl', 'profit', 'pnl_value', 'pl']);
+export function normalizeTrades(rows){
+  const k = (r, candidates) => candidates.find(c => c in r);
   return rows.map(r => ({
-    ts_open: parseTs(r[openCol]),
-    ts_close: parseTs(r[closeCol]),
-    side: r[sideCol] || null,
-    qty: r[qtyCol] !== undefined ? Number(r[qtyCol]) : null,
-    entry: r[entryCol] !== undefined ? Number(r[entryCol]) : null,
-    exit: r[exitCol] !== undefined ? Number(r[exitCol]) : null,
-    pnl: r[pnlCol] !== undefined ? Number(r[pnlCol]) : null,
-  })).filter(t => t.ts_open !== null || t.ts_close !== null);
-}
-
-export async function fetchEquity(jobId) {
-  const arts = await listArtifacts(jobId);
-  const a = arts.find(x => /equity\.csv$|oos_equity\.csv$/i.test(x.path));
-  if (!a) throw new Error('equity artifact not found');
-  const rows = await readArtifactCSV(a.path);
-  const equity = normalizeEquity(rows);
-  return { equity, artifact: a };
-}
-
-export async function fetchTrades(jobId) {
-  const arts = await listArtifacts(jobId);
-  const a = arts.find(x => /trades\.csv$/i.test(x.path));
-  if (!a) throw new Error('trades artifact not found');
-  const rows = await readArtifactCSV(a.path);
-  const trades = normalizeTrades(rows);
-  return { trades, artifact: a };
+    ts_open: Number(r[k(r, ['ts_open','open_ts','entry_ts','opened_at'])]),
+    ts_close: Number(r[k(r, ['ts_close','close_ts','exit_ts','closed_at'])]),
+    side: String(r[k(r, ['side','direction'])] ?? '').toUpperCase(),
+    qty: Number(r[k(r, ['qty','quantity','size'])]),
+    entry: Number(r[k(r, ['entry','entry_price','open_price'])]),
+    exit: Number(r[k(r, ['exit','exit_price','close_price'])]),
+    pnl: Number(r[k(r, ['pnl','pnl_usd','profit'])]),
+  })).filter(t => Number.isFinite(t.ts_open) && Number.isFinite(t.ts_close));
 }

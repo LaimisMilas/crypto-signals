@@ -20,7 +20,7 @@ import { jobsRoutes } from './routes/jobs.js';
 import binanceRoutes from './integrations/binance/routes.js';
 import healthRoutes from './routes/health.js';
 import analyticsJobsRoutes from './routes/analytics.jobs.js';
-import { fetchEquity, fetchTrades } from './services/analyticsArtifacts.js';
+import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'client', 'public');
@@ -425,19 +425,24 @@ app.get('/analytics', async (req, res) => {
   const overlayJobId = req.query.overlay_job_id ? Number(req.query.overlay_job_id) : null;
   if (overlayJobId) {
     try {
-      const { equity: oe } = await fetchEquity(overlayJobId);
-      overlayEquity = oe;
+      const arts = await listArtifacts(overlayJobId);
+      const a = arts.find(x => /equity\.csv$|oos_equity\.csv$/i.test(x.path));
+      if (a) {
+        const rows = await readArtifactCSV(overlayJobId, a.path);
+        overlayEquity = normalizeEquity(rows);
+        const ret = overlayEquity.length ? (overlayEquity.at(-1).equity / overlayEquity[0].equity - 1) : null;
+        let peak = -Infinity;
+        let maxDD = 0;
+        overlayEquity.forEach(p => {
+          peak = Math.max(peak, p.equity);
+          maxDD = Math.min(maxDD, (p.equity / peak - 1));
+        });
+        overlayStats = { return: ret, maxDD };
+      }
     } catch (e) {
       console.error('[analytics] overlay equity error:', e);
-    }
-    try {
-      const { trades: ot } = await fetchTrades(overlayJobId);
-      const { equity: tEq, stats: oStats } = computeStatsFromTrades(ot);
-      overlayStats = oStats;
-      if (!overlayEquity) overlayEquity = tEq;
-    } catch (e) {
-      if (!overlayStats) overlayStats = null;
-      console.error('[analytics] overlay trades error:', e);
+      overlayEquity = null;
+      overlayStats = null;
     }
   }
 
