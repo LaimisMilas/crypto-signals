@@ -33,6 +33,7 @@ import { sseRouter } from './routes/sse.js';
 import analyticsOverlaysCsvRoutes from './routes/analytics.overlays.csv.js';
 import analyticsOverlayShareRoutes from './routes/analytics.overlay.share.js';
 import analyticsOptimizeTopRoutes from './routes/analytics.optimize.top.js';
+import analyticsOverlayRoutes from './routes/analytics-overlay.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
 
 const port = process.env.PORT || 3000;
@@ -81,6 +82,7 @@ app.use(bodyParser.json());
   app.use('/', analyticsOverlaysCsvRoutes);
   app.use('/', analyticsOverlayShareRoutes);
   app.use('/', analyticsOptimizeTopRoutes);
+  app.use('/', analyticsOverlayRoutes);
   app.use(sseRouter);
   metricsRouter(app);
 
@@ -475,7 +477,8 @@ app.get('/analytics', async (req, res) => {
         const a = arts.find(x => /equity\.csv$|oos_equity\.csv$/i.test(x.path));
         if (!a) continue;
         const rows = await readArtifactCSV(id, a.path);
-        const eq = normalizeEquity(rows);
+        const { rows: jrows } = await db.query('SELECT type FROM jobs WHERE id=$1', [id]);
+        const eq = normalizeEquity(rows, jrows[0]?.type);
         if (!eq.length) continue;
 
         const ret = eq.at(-1).equity / eq[0].equity - 1;

@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { context, trace } from '@opentelemetry/api';
-import { sseConnections, sseEventsSent } from '../metrics.js';
+import { sseConnections, sseEventsSent } from '../observability/metrics.js';
 
 const clients = new Set();
 

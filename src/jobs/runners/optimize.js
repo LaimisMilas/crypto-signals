@@ -10,8 +10,8 @@ export async function run(job, { log, progress, signal }) {
     progress((i + 1) / total);
     log('info', `combo ${i + 1} / ${total}`);
   }
-  await writeCSV(job.id, 'optimize_results.csv', 'params,metric\n', 'Optimize Results');
+  await writeCSV(job.id, job.type, 'optimize_results.csv', 'params,metric\n', 'Optimize Results');
   const result = { best: null };
-  await writeJSON(job.id, 'best_params.json', result, 'Best Params');
+  await writeJSON(job.id, job.type, 'best_params.json', result, 'Best Params');
   return result;
 }

@@ -1,5 +1,6 @@
 import express from 'express';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from '../services/analyticsArtifacts.js';
+import { db } from '../storage/db.js';
 
 const router = express.Router();
 
@@ -21,7 +22,8 @@ router.get('/analytics/overlays.csv', async (req, res) => {
     const a = arts.find(x => /equity\.csv$|oos_equity\.csv$/i.test(x.path));
     if (!a) continue;
     const rows = await readArtifactCSV(id, a.path);
-    const eq = normalizeEquity(rows);
+    const { rows: jrows } = await db.query('SELECT type FROM jobs WHERE id=$1', [id]);
+    const eq = normalizeEquity(rows, jrows[0]?.type);
     series.push({ id, data: eq });
     eq.forEach(p => tsSet.add(String(p.ts)));
   }

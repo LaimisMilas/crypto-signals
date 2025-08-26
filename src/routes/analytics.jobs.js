@@ -27,7 +27,8 @@ router.get('/analytics/job/:id/equity', async (req, res) => {
   const a = arts.find(x => /equity\.csv$|oos_equity\.csv$/i.test(x.path));
   if (!a) return res.status(404).json({ error: 'equity artifact not found' });
   const rows = await readArtifactCSV(jobId, a.path);
-  const equity = normalizeEquity(rows);
+  const { rows: jrows } = await db.query('SELECT type FROM jobs WHERE id=$1', [jobId]);
+  const equity = normalizeEquity(rows, jrows[0]?.type);
   res.json({ equity, artifact: a });
 });
 
