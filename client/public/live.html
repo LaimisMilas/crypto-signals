@@ -6,45 +6,39 @@
     <link rel="stylesheet" href="/assets/nav.css">
     <link rel="stylesheet" href="/assets/ui-breadcrumbs.css">
     <link rel="stylesheet" href="/assets/ui-tabs.css">
-    <style>.lazy-skeleton{font-size:14px}</style>
+    <link rel="stylesheet" href="/assets/ui-loader.css" />
   </head>
   <body>
   <div id="app-nav"></div>
   <div id="app-breadcrumbs"></div>
 
   <main class="container">
-    <div class="tabs" data-tabs id="live-tabs">
-      <div class="tablist" role="tablist" aria-label="Live sections">
-        <button role="tab" id="tab-equity"   data-tab="equity"   aria-selected="true">Equity</button>
-        <button role="tab" id="tab-history"  data-tab="history">History</button>
-        <button role="tab" id="tab-orders"   data-tab="orders">Orders</button>
-        <button role="tab" id="tab-risk"     data-tab="risk">Risk</button>
-      </div>
+    <div class="ui-tabs" id="live-tabs" role="tablist">
+      <button role="tab" aria-controls="live-equity" data-module="liveEquity">Equity</button>
+      <button role="tab" aria-controls="live-history" data-module="liveHistory">History</button>
+      <button role="tab" aria-controls="live-orders" data-module="liveOrders">Orders</button>
+      <button role="tab" aria-controls="live-risk" data-module="liveRisk">Risk</button>
+    </div>
 
-        <section role="tabpanel" id="panel-equity"  data-tab-panel="equity"  aria-labelledby="tab-equity"
-          data-lazy-module="/assets/modules/live/equity.js"
-          data-lazy-vendor="/assets/vendor/chart.umd.js">
-          <!-- Canvas will be created in module -->
-        </section>
-        <section role="tabpanel" id="panel-history" data-tab-panel="history" aria-labelledby="tab-history"
-          data-lazy-module="/assets/modules/live/history.js" hidden>
-          <!-- closed trades table -->
-        </section>
-        <section role="tabpanel" id="panel-orders"  data-tab-panel="orders" aria-labelledby="tab-orders"
-          data-lazy-module="/assets/modules/live/orders.js" hidden>
-          <!-- fills/orders real-time -->
-        </section>
-        <section role="tabpanel" id="panel-risk"    data-tab-panel="risk"   aria-labelledby="tab-risk"
-          data-lazy-module="/assets/modules/live/risk.js" hidden>
-          <!-- guardrails status, exposure -->
-        </section>
-      </div>
-    </main>
+    <section id="live-equity" role="tabpanel" tabindex="0">
+      <div id="equity-panel" class="panel-body"></div>
+    </section>
+    <section id="live-history" role="tabpanel" tabindex="0" hidden>
+      <div id="history-panel" class="panel-body"></div>
+    </section>
+    <section id="live-orders" role="tabpanel" tabindex="0" hidden>
+      <div id="orders-panel" class="panel-body"></div>
+    </section>
+    <section id="live-risk" role="tabpanel" tabindex="0" hidden>
+      <div id="risk-panel" class="panel-body"></div>
+    </section>
+  </main>
 
   <div id="app-footer"></div>
     <script src="/assets/nav.js"></script>
     <script src="/assets/ui-breadcrumbs.js"></script>
     <script src="/assets/ui-tabs.js"></script>
     <script src="/assets/ui-lazy.js"></script>
+    <script src="/assets/ui-loader.js"></script>
   </body>
 </html>

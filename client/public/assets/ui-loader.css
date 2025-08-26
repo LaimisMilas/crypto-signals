@@ -1,0 +1,36 @@
+/* Universalus loader + skeleton’ai su švelniu „shimmer“ efektu */
+.ui-loader {
+  position: relative;
+  display: block;
+}
+
+.ui-skeleton {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background: linear-gradient(90deg, rgba(0,0,0,0.08), rgba(0,0,0,0.12), rgba(0,0,0,0.08));
+  background-size: 200% 100%;
+  animation: ui-shimmer 1.2s infinite linear;
+  min-height: 0.8rem;
+}
+
+@keyframes ui-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Variantai */
+.ui-skeleton.text { height: 0.9rem; margin: 0.4rem 0; border-radius: 0.25rem; }
+.ui-skeleton.title { height: 1.2rem; margin: 0.6rem 0; }
+.ui-skeleton.rect { height: 1.5rem; margin: 0.5rem 0; }
+.ui-skeleton.circle { width: 2rem; height: 2rem; border-radius: 999px; }
+
+.ui-skeleton.row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; height: 1.2rem; }
+
+.ui-loader-stack > .ui-skeleton + .ui-skeleton { margin-top: 0.5rem; }
+
+/* Table placeholder */
+.ui-skeleton-table { display: grid; gap: 0.6rem; }
+.ui-skeleton-tr { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.6rem; }
+.ui-skeleton-td { height: 0.9rem; }
