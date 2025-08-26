@@ -34,6 +34,7 @@ import analyticsOverlayShareRoutes from './routes/analytics.overlay.share.js';
 import analyticsOptimizeTopRoutes from './routes/analytics.optimize.top.js';
 import analyticsOptimizeInlineRoutes from './routes/analytics.optimize.inline.js';
 import analyticsOverlayRoutes from './routes/analytics-overlay.js';
+import analyticsOverlaySetsRoutes from './routes/analytics.overlay.sets.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -77,6 +78,7 @@ app.use('/', analyticsJobsRoutes);
   app.use('/', analyticsOptimizeTopRoutes);
   app.use('/', analyticsOptimizeInlineRoutes);
   app.use('/', analyticsOverlayRoutes);
+  app.use('/', analyticsOverlaySetsRoutes);
   sseRoutes(app);
   metricsRouter(app);
 

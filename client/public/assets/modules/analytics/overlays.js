@@ -26,12 +26,19 @@ export async function mount(root){
     <div id="ov-jobs" style="margin-top:12px"></div>
     <div id="ov-stats" style="margin-top:12px"></div>
     <div id="ov-top-results" style="margin-top:12px"></div>
+    <div id="ov-sets" style="margin-top:16px">
+      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+        <label>Name<br><input id="ov-set-name" placeholder="e.g. EMA vs ADX (Live)"></label>
+        <button id="ov-set-save" class="btn">Save Set</button>
+      </div>
+      <div id="ov-set-list" style="margin-top:10px"></div>
+    </div>
   `;
 
   const el = id => root.querySelector(id);
   const input = { type: el('#ov-type'), symbol: el('#ov-symbol'), strategy: el('#ov-strategy'), topId: el('#ov-top-id'), topN: el('#ov-top-n'), tol: el('#ov-tol') };
   const btn = { load: el('#ov-load'), apply: el('#ov-apply'), clear: el('#ov-clear'), export: el('#ov-export'), share: el('#ov-share'), topLoad: el('#ov-top-load'), topInline: el('#ov-top-inline') };
-  const box = { jobs: el('#ov-jobs'), stats: el('#ov-stats'), top: el('#ov-top-results') };
+  const box = { jobs: el('#ov-jobs'), stats: el('#ov-stats'), top: el('#ov-top-results'), sets: el('#ov-set-list') };
   const chkBaseline = el('#ov-baseline');
   const selectAlign = el('#ov-align');
   const selectRebase = el('#ov-rebase');
@@ -242,6 +249,119 @@ export async function mount(root){
     }
   }
 
+  async function loadSets(){
+    box.sets.innerHTML = '<div style="opacity:.7">Loading...</div>';
+    try{
+      const json = await fetch('/analytics/overlay-sets').then(r=>r.json());
+      renderSets(json.sets || []);
+    }catch(e){
+      box.sets.innerHTML = `<div style="color:#c00">${e.message}</div>`;
+    }
+  }
+
+  function currentSettings(){
+    return {
+      jobIds: Array.from(selectedJobs.keys()),
+      baseline: chkBaseline.checked ? 'live' : 'none',
+      align: selectAlign.value,
+      rebase: selectRebase.value || null,
+      inline: (input.topId.value ? { optimizeJobId: Number(input.topId.value), n: Number(input.topN.value||3), tol: Number(input.tol.value||0) } : null)
+    };
+  }
+
+  async function saveSet(){
+    const name = root.querySelector('#ov-set-name').value?.trim();
+    if (!name){ Toast.open({ title:'Name required', variant:'warning' }); return; }
+    const payload = currentSettings();
+    const res = await fetch('/analytics/overlay-sets', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, payload }) });
+    const j = await res.json();
+    if (!res.ok){ Toast.open({ title:'Save failed', description:j.error||res.statusText, variant:'error' }); return; }
+    Toast.open({ title:'Set saved', variant:'success' });
+    loadSets();
+  }
+
+  function renderSets(sets){
+    const el = box.sets;
+    if (!sets.length){ el.innerHTML = '<div style="opacity:.7">No saved sets</div>'; return; }
+    el.innerHTML = sets.map(s=> `
+      <div class="card" data-id="${s.id}" style="padding:10px;border:1px solid #222;border-radius:10px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+          <div><b>${s.name}</b> ${s.pinned ? '📌' : ''}</div>
+          <div style="display:flex;gap:6px">
+            <button data-act="apply">Apply</button>
+            <button data-act="rename">Rename</button>
+            <button data-act="pin">${s.pinned ? 'Unpin' : 'Pin'}</button>
+            <button data-act="share">Share</button>
+            <button data-act="export">Export JSON</button>
+            <button data-act="delete">Delete</button>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#9aa0a6">${(s.payload?.jobIds||[]).length} jobs • baseline=${s.payload?.baseline} • align=${s.payload?.align} • rebase=${s.payload?.rebase??'-'} ${s.payload?.inline?`• inline: opt#${s.payload.inline.optimizeJobId} TOP-${s.payload.inline.n}`:''}</div>
+      </div>
+    `).join('');
+
+    el.querySelectorAll('.card').forEach(card=>{
+      const id = Number(card.dataset.id);
+      card.addEventListener('click', async (e)=>{
+        const act = e.target?.dataset?.act;
+        if (!act) return;
+        if (act==='apply'){
+          const s = (sets.find(x=>x.id===id) || {});
+          await applyOverlaySet(s.payload);
+        } else if (act==='rename'){
+          const name = prompt('New name:', sets.find(x=>x.id===id)?.name || '');
+          if (!name) return;
+          await fetch(`/analytics/overlay-sets/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
+          loadSets();
+        } else if (act==='pin'){
+          const pinned = !sets.find(x=>x.id===id)?.pinned;
+          await fetch(`/analytics/overlay-sets/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pinned }) });
+          loadSets();
+        } else if (act==='delete'){
+          if (!confirm('Delete this set?')) return;
+          await fetch(`/analytics/overlay-sets/${id}`, { method:'DELETE' });
+          loadSets();
+        } else if (act==='share'){
+          const r = await fetch(`/analytics/overlay-sets/${id}/share`, { method:'POST' }).then(r=>r.json());
+          const url = r.url || '';
+          await navigator.clipboard?.writeText(location.origin + url);
+          Toast.open({ title:'Share link copied', description:url, variant:'success' });
+        } else if (act==='export'){
+          const s = sets.find(x=>x.id===id);
+          const blob = new Blob([JSON.stringify(s.payload, null, 2)], { type:'application/json' });
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${s.name.replace(/\s+/g,'_')}.overlay.json`; a.click();
+        }
+      });
+    });
+  }
+
+  async function applyOverlaySet(pl){
+    if (!pl) return;
+    chkBaseline.checked = pl.baseline === 'live';
+    selectAlign.value = pl.align || 'none';
+    selectRebase.value = pl.rebase != null ? String(pl.rebase) : '';
+    input.topId.value = pl.inline?.optimizeJobId != null ? String(pl.inline.optimizeJobId) : '';
+    input.topN.value = pl.inline?.n != null ? String(pl.inline.n) : '3';
+    input.tol.value = pl.inline?.tol != null ? String(pl.inline.tol) : '0';
+    selectedJobs.clear();
+    (pl.jobIds || []).forEach(id => selectedJobs.set(id, { id, artifacts: [] }));
+    renderJobs();
+    const ids = pl.jobIds || [];
+    const qs = new URLSearchParams({ overlay_job_ids: ids.join(','), baseline: pl.baseline || 'none', overlay_align: pl.align || 'none' });
+    const base = await fetch(`/analytics?${qs}`).then(r=>r.json());
+    window.dispatchEvent(new CustomEvent('analytics:overlays:v2', {
+      detail: { items: base.overlayEquities || [], baseline: base.baseline, settings: { align: pl.align, rebase: pl.rebase } }
+    }));
+    renderStats(base.overlayStatsByJobId || {}, base.baseline);
+    if (pl.inline?.optimizeJobId){
+      const inline = await fetch(`/analytics/optimize/${pl.inline.optimizeJobId}/inline-overlays?n=${pl.inline.n||3}&tol=${pl.inline.tol||0}`).then(r=>r.json());
+      if (inline.items?.length){
+        window.dispatchEvent(new CustomEvent('analytics:overlays:inline', { detail:{ items: inline.items } }));
+      }
+    }
+    Toast.open({ title:'Overlay set applied', variant:'success' });
+  }
+
   btn.load.addEventListener('click', loadJobs);
   btn.apply.addEventListener('click', applyOverlays);
   btn.clear.addEventListener('click', clearAll);
@@ -249,6 +369,8 @@ export async function mount(root){
   btn.share.addEventListener('click', shareUrl);
   btn.topLoad.addEventListener('click', loadTopN);
   btn.topInline.addEventListener('click', loadTopNInline);
+  root.querySelector('#ov-set-save').addEventListener('click', saveSet);
+  loadSets();
 
   // Auto-refresh on new succeeded job
   const es = new EventSource('/jobs/stream');
@@ -280,19 +402,17 @@ export async function mount(root){
   const shareToken = new URLSearchParams(location.search).get('share');
   if (shareToken){
     try{
-      const res = await fetch(`/analytics/overlays/share/${shareToken}`);
+      let res = await fetch(`/analytics/overlay-sets/share/${shareToken}`);
+      if (res.status === 404) res = await fetch(`/analytics/overlays/share/${shareToken}`);
       const payload = await res.json();
       chkBaseline.checked = payload.baseline === 'live';
       selectAlign.value = payload.align || 'none';
       selectRebase.value = payload.rebase ? String(payload.rebase) : '';
+      input.topId.value = payload.inline?.optimizeJobId != null ? String(payload.inline.optimizeJobId) : '';
+      input.topN.value = payload.inline?.n != null ? String(payload.inline.n) : '3';
+      input.tol.value = payload.inline?.tol != null ? String(payload.inline.tol) : '0';
       await loadJobs();
-      selectedJobs.clear();
-      (payload.jobIds || []).forEach(id => {
-        const job = jobs.find(j => j.id === id);
-        if (job) selectedJobs.set(id, job); else selectedJobs.set(id, { id, artifacts: [] });
-      });
-      renderJobs();
-      applyOverlays();
+      await applyOverlaySet(payload);
     }catch(e){
       Toast.open({ title:'Share load failed', description:e.message, variant:'error' });
     }
