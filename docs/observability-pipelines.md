@@ -34,11 +34,28 @@ point at your backends.
 Sampling is controlled via environment variables in `deploy/otel/env.example`.
 Change `TRACE_SAMPLING_DEFAULT`, `TRACE_SAMPLING_ERROR` and
 `TRACE_SAMPLING_IMPORTANT` to adjust tail sampling without redeploying.
+For incident debugging set one or more of these values to `1.0` to capture
+every span. For example:
+
+```bash
+# sample all traces for important routes
+TRACE_SAMPLING_IMPORTANT=1.0 docker compose -f docker-compose.observability.yml up
+
+# sample everything temporarily
+TRACE_SAMPLING_DEFAULT=1.0 docker compose -f docker-compose.observability.yml up
+```
+
+Reset the variables after resolving the issue to avoid excessive data volume.
 
 ## Troubleshooting
 
 A Grafana dashboard "Pipeline Health" should be created to monitor exporter
 failures, receiver refusals and sampling ratios. Prometheus alert rules in
-`deploy/prometheus/alerts.yml` fire when the collector drops data.
+`deploy/prometheus/alerts.yml` fire when the collector drops data. The most
+useful metrics are:
+
+- `otelcol_exporter_send_failed_spans`
+- `otelcol_receiver_refused_spans`
+- `otelcol_exporter_send_failed_logs`
 
 Collector logs and metrics are the first place to look when data is missing.
