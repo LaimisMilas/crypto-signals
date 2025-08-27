@@ -4,7 +4,7 @@ import { generateSignals } from '../signal/generateSignals.js';
 export const debugObservRouter = Router();
 
 debugObservRouter.post('/debug/run-indicators', async (req, res) => {
-  const { symbol = 'SOLUSDT', interval = '1m', n = 200 } = req.body || {};
+  const { symbol = 'SOLUSDT', interval = '1m', n = 200, force = false } = req.body || {};
   // sugeneruok paprastas 1m žvakes
   const now = Date.now();
   const candles = Array.from({ length: n }, (_, i) => {
@@ -15,6 +15,6 @@ debugObservRouter.post('/debug/run-indicators', async (req, res) => {
     const low = Math.min(open, close) - Math.random();
     return { ts, timestamp: ts, open, high, low, close };
   });
-  const signals = generateSignals(candles, { symbol, interval, strategy: 'dev-smoke' });
+  const signals = generateSignals(candles, { symbol, interval, strategy: 'dev-smoke', force });
   res.json({ ok: true, count: signals.length });
 });

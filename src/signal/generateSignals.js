@@ -6,7 +6,7 @@ import { aiScoreInstrumented } from './indicators/ai.js';
 import { noteSignal, noteSuppressed, noteMissingCandles, noteDataStaleness } from './instrumentation.js';
 
 export function generateSignals(candles, params) {
-  const { symbol = 'SOLUSDT', interval = '1m', strategy = params?.strategy || 'default' } = params || {};
+  const { symbol = 'SOLUSDT', interval = '1m', strategy = params?.strategy || 'default', force = false } = params || {};
   if (!Array.isArray(candles) || candles.length < 20) return [];
 
   // Duomenų kokybė
@@ -17,19 +17,17 @@ export function generateSignals(candles, params) {
   noteDataStaleness(symbol, interval, Math.max(0, (Date.now() - lastTs) / 1000));
 
   // Indikatoriai
-  const [rsi, atr, trend, engulf, ai] = [
-    rsi14Instrumented({ candles, symbol, interval, strategy }),
-    atr14Instrumented({ candles, symbol, interval, strategy }),
-    trendInstrumented({ candles, symbol, interval, strategy }),
-    bullishEngulfingInstrumented({ candles, symbol, interval, strategy }),
-    aiScoreInstrumented({ candles, symbol, interval, strategy })
-  ];
+  const rsi = rsi14Instrumented({ candles, symbol, interval, strategy });
+  atr14Instrumented({ candles, symbol, interval, strategy });
+  const trend = trendInstrumented({ candles, symbol, interval, strategy });
+  const engulf = bullishEngulfingInstrumented({ candles, symbol, interval, strategy });
+  const ai = aiScoreInstrumented({ candles, symbol, interval, strategy });
 
   // Tavo logika – pavyzdys:
   const signals = [];
   const lastClose = candles.at(-1).close;
 
-  const wantBuy = trend === 'up' && rsi?.value < 40 && engulf === true && (ai?.value ?? 0) >= 0.5;
+  const wantBuy = force || (trend === 'up' && rsi?.value < 40 && engulf === true && (ai?.value ?? 0) >= 0.5);
   if (wantBuy) {
     signals.push({ side: 'BUY', price: lastClose, ts: lastTs });
     noteSignal({ strategy, symbol, interval, side: 'BUY' });
