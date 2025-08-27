@@ -37,12 +37,17 @@ import analyticsOverlayRoutes from './routes/analytics-overlay.js';
 import analyticsOverlaySetsRoutes from './routes/analytics.overlay.sets.js';
 import analyticsReportRoutes from './routes/analytics.report.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
+import { debugObservRouter } from './routes/debug-observ.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'client', 'public');
 const app = express();
 // Alias db pool for clarity
 const pool = db;
+
+if (process.env.DEBUG_OBSERV === '1') {
+  app.use(debugObservRouter);
+}
 
 app.use(requestId);
 app.use(httpLogger);
