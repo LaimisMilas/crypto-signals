@@ -25,7 +25,10 @@
     "signals": "node scripts/generate-signals.js",
     "wf": "node scripts/walkforward.js",
     "wf:summary": "node scripts/wf-summary.js",
-    "artifacts:backfill": "node scripts/backfill-artifacts-size.js"
+    "artifacts:backfill": "node scripts/backfill-artifacts-size.js",
+    "prom:check": "docker run --rm -v \"$PWD/deploy/prometheus:/etc/prometheus\" prom/prometheus promtool check rules /etc/prometheus/alerts.yml /etc/prometheus/recording-rules.yml /etc/prometheus/alerts-burnrate.yml",
+    "stack:up": "docker compose -f deploy/docker-compose.observability.yml up -d prometheus alertmanager grafana",
+    "stack:logs": "docker compose -f deploy/docker-compose.observability.yml logs -f prometheus"
   },
   "dependencies": {
     "@opentelemetry/auto-instrumentations-node": "^0.62.1",

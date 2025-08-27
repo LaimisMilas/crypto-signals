@@ -1,21 +1,14 @@
 groups:
 - name: sli.records
   rules:
-  # API availability error ratio
   - record: sli:api_error_ratio:rate5m
     expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))
-
-  # API latency good ratio (under 1s)
   - record: sli:api_latency_under_1s_ratio:rate5m
-    expr: (sum(rate(http_request_duration_seconds_bucket{le="1"}[5m])) by () ) / (sum(rate(http_request_duration_seconds_count[5m])) by ())
-
-  # SSE ping delivery ratio: delivered / expected
+    expr: (sum(rate(http_request_duration_seconds_bucket{le="1"}[5m])) by ()) / (sum(rate(http_request_duration_seconds_count[5m])) by ())
   - record: sli:sse_ping_delivery_ratio:rate5m
     expr: clamp_max(
-      rate(sse_events_sent_total{event="ping"}[5m])
-      / ( (avg_over_time(sse_connections[5m])) / (15) )
+      rate(sse_events_sent_total{event="ping"}[5m]) /
+      ((avg_over_time(sse_connections[5m])) / 15)
     , 1)
-
-  # Jobs success ratio
   - record: sli:jobs_success_ratio:rate15m
     expr: 1 - ( sum(rate(job_duration_seconds_count{status="err"}[15m])) / sum(rate(job_duration_seconds_count[15m])) )

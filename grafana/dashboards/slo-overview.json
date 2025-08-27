@@ -1,0 +1,18 @@
+{
+  "title": "SLO Overview",
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "API availability (1 - error ratio)",
+      "targets": [{ "expr": "1 - sli:api_error_ratio:rate5m", "legendFormat": "API availability" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Indicator Latency p95 by indicator",
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(indicator_latency_seconds_bucket[5m])) by (le, indicator))", "legendFormat": "{{indicator}}" }]
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1
+}
