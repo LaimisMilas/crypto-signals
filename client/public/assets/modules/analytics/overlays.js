@@ -16,6 +16,10 @@ export async function mount(root){
       <button id="ov-export" class="btn">Export CSV</button>
       <button id="ov-share" class="btn">Share URL</button>
     </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button id="ov-report-zip" class="btn">Download Report (ZIP)</button>
+      <button id="ov-report-zip-png" class="btn">Download Report + PNG</button>
+    </div>
     <div style="margin-top:12px;display:flex;gap:8px;align-items:end;flex-wrap:wrap">
       <div><label>Optimize job ID<br><input id="ov-top-id" style="width:100px"></label></div>
       <div><label>N<br><input id="ov-top-n" type="number" min="1" max="5" value="3" style="width:60px"></label></div>
@@ -37,7 +41,7 @@ export async function mount(root){
 
   const el = id => root.querySelector(id);
   const input = { type: el('#ov-type'), symbol: el('#ov-symbol'), strategy: el('#ov-strategy'), topId: el('#ov-top-id'), topN: el('#ov-top-n'), tol: el('#ov-tol') };
-  const btn = { load: el('#ov-load'), apply: el('#ov-apply'), clear: el('#ov-clear'), export: el('#ov-export'), share: el('#ov-share'), topLoad: el('#ov-top-load'), topInline: el('#ov-top-inline') };
+  const btn = { load: el('#ov-load'), apply: el('#ov-apply'), clear: el('#ov-clear'), export: el('#ov-export'), share: el('#ov-share'), reportZip: el('#ov-report-zip'), reportZipPng: el('#ov-report-zip-png'), topLoad: el('#ov-top-load'), topInline: el('#ov-top-inline') };
   const box = { jobs: el('#ov-jobs'), stats: el('#ov-stats'), top: el('#ov-top-results'), sets: el('#ov-set-list') };
   const chkBaseline = el('#ov-baseline');
   const selectAlign = el('#ov-align');
@@ -259,6 +263,23 @@ export async function mount(root){
     }
   }
 
+  function currentSelection(){
+    return {
+      jobIds: Array.from(selectedJobs.keys()),
+      baseline: chkBaseline.checked ? 'live' : 'none',
+      align: selectAlign.value,
+      rebase: selectRebase.value || null
+    };
+  }
+
+  function downloadBlob(filename, blob){
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    setTimeout(()=> URL.revokeObjectURL(a.href), 1000);
+  }
+
   function currentSettings(){
     return {
       jobIds: Array.from(selectedJobs.keys()),
@@ -367,6 +388,35 @@ export async function mount(root){
   btn.clear.addEventListener('click', clearAll);
   btn.export.addEventListener('click', exportCsv);
   btn.share.addEventListener('click', shareUrl);
+  btn.reportZip.addEventListener('click', async ()=>{
+    const s = currentSelection();
+    if (!s.jobIds.length){ Toast.open({ title:'Pick at least one job', variant:'warning' }); return; }
+    const qs = new URLSearchParams({
+      job_ids: s.jobIds.join(','), baseline: s.baseline, overlay_align: s.align, overlay_rebase: s.rebase||''
+    });
+    const res = await fetch(`/analytics/overlays/report?${qs}`);
+    if (!res.ok){ Toast.open({ title:'Report failed', description: res.statusText, variant:'error' }); return; }
+    const blob = await res.blob();
+    downloadBlob('analytics-report.zip', blob);
+    Toast.open({ title:'Report downloaded', variant:'success' });
+  });
+  btn.reportZipPng.addEventListener('click', async ()=>{
+    const s = currentSelection();
+    if (!s.jobIds.length){ Toast.open({ title:'Pick at least one job', variant:'warning' }); return; }
+    try{
+      const png = window.AnalyticsChart?.toBase64Image?.();
+      const res = await fetch('/analytics/overlays/report', {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ ...s, image: png })
+      });
+      if (!res.ok){ const t=await res.text(); throw new Error(t||res.statusText); }
+      const blob = await res.blob();
+      downloadBlob('analytics-report.zip', blob);
+      Toast.open({ title:'Report (PNG) downloaded', variant:'success' });
+    } catch(e){
+      Toast.open({ title:'Report failed', description: e.message, variant:'error' });
+    }
+  });
   btn.topLoad.addEventListener('click', loadTopN);
   btn.topInline.addEventListener('click', loadTopNInline);
   root.querySelector('#ov-set-save').addEventListener('click', saveSet);

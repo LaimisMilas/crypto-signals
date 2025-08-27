@@ -14,6 +14,7 @@ export async function mount(root){
     data: { datasets: [] },
     options: { responsive: true }
   });
+  window.AnalyticsChart = chart;
   const COLORS = ['#4cc9f0','#ffd166','#06d6a0','#ef476f','#118ab2'];
   const colorOf = (jobId) => COLORS[jobId % COLORS.length];
   let originalBaseline = null;
