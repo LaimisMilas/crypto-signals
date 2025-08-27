@@ -1,0 +1,19 @@
+route:
+  receiver: default
+  group_by: ['alertname']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 3h
+
+receivers:
+  - name: default
+    slack_configs:
+      - api_url: ${SLACK_WEBHOOK_URL}
+        channel: ${SLACK_CHANNEL}
+        send_resolved: true
+        title: '{{ .CommonAnnotations.summary }}'
+        text: '{{ range .Alerts }}*{{ .Labels.alertname }}* ({{ .Labels.severity }})\n{{ .Annotations.description }}\n{{ end }}'
+
+    webhook_configs:
+      - url: ${GENERIC_WEBHOOK_URL}
+        send_resolved: true

@@ -1,0 +1,17 @@
+{
+  "title": "Signals & Indicators",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "NaN inputs by indicator (rate)",
+      "targets": [{ "expr": "sum by(indicator)(rate(data_nan_inputs_total[5m]))", "legendFormat": "{{indicator}}" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Signals emitted (15m increase)",
+      "targets": [{ "expr": "sum by(strategy,side)(increase(signal_emitted_total[15m]))", "legendFormat": "{{strategy}} {{side}}" }]
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1
+}
