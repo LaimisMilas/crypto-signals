@@ -1,7 +1,7 @@
+import { timeIndicator } from '../instrumentation.js';
+
 export function computeTrend(candles) { /* ... RETURN: 'up'|'down'|'range' */ }
 
-import { timeIndicator } from '../instrumentation.js';
-export function trendInstrumented(meta) {
-  const { candles } = meta;
-  return timeIndicator({ ...meta, indicator: 'trend' }, computeTrend, candles);
+export function trendInstrumented({ candles, symbol, interval, strategy }) {
+  return timeIndicator({ indicator: 'trend', symbol, interval, strategy }, computeTrend, candles);
 }
