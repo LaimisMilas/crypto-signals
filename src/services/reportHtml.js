@@ -76,6 +76,7 @@ export function htmlPage({ title, dataJson, generatedAt, params }) {
   const el = document.getElementById('report-data');
   const data = JSON.parse(el.textContent || '{}');
   const ctx = document.getElementById('chart').getContext('2d');
+  const inline = data.inline || [];
 
   // Align + Rebase kaip Overlays v2
   function alignAndRebase(series, baseline, settings){
@@ -113,6 +114,14 @@ export function htmlPage({ title, dataJson, generatedAt, params }) {
   const base = data.baseline || null;
   const series = data.items || [];
   const { series:aligned, baseline:alignedBase } = alignAndRebase(series.map(x=>({ ...x, equity:[...x.equity] })), base? { ...base, equity:[...base.equity] } : null, settings);
+  const alignedInline = inline.map(x=> ({ ...x, equity: [...x.equity] }));
+  if (data.params.rebase){
+    alignedInline.forEach(s=>{
+      if (!s.equity.length) return;
+      const y0 = s.equity[0].equity;
+      s.equity = s.equity.map(p=>({ ts:p.ts, equity: data.params.rebase * (p.equity / y0) }));
+    });
+  }
 
   // Chart
   const colors = ['#4cc9f0','#ffd166','#06d6a0','#ef476f','#118ab2','#f72585','#9b5de5','#5bc0eb','#c2f970','#ff9f1c'];
@@ -130,11 +139,30 @@ export function htmlPage({ title, dataJson, generatedAt, params }) {
       borderDash:[6,4], borderWidth:2, pointRadius:0, borderColor: color(i + (alignedBase?1:0))
     });
   });
+  alignedInline.forEach((s,i)=>{
+    datasets.push({
+      label: (s.label || 'inline'),
+      data: s.equity.map(p=>({x:p.ts,y:p.equity})),
+      borderDash:[2,3], borderWidth:2, pointRadius:0, borderColor: color(7+i)
+    });
+  });
   const chart = new Chart(ctx, {
     type: 'line',
     data: { datasets },
     options: { parsing:false, animation:false, plugins:{ legend:{ position:'bottom' } }, scales:{ x:{ type:'timeseries' }, y:{ beginAtZero:false } } }
   });
+
+  // Header pills
+  const header = document.querySelector('header .card .muted');
+  const pillsHost = document.createElement('div');
+  pillsHost.style.marginTop = '6px';
+  const pills = [];
+  if (data.params.baseline==='live') pills.push('<span class="pill">Live Baseline ON</span>');
+  pills.push('<span class="pill">Align: '+(data.params.align||'none')+'</span>');
+  pills.push('<span class="pill">Rebase: '+(data.params.rebase ?? '-')+'</span>');
+  if (data.inlineReq?.optimizeJobId){ pills.push('<span class="pill">Inline: opt#'+data.inlineReq.optimizeJobId+' TOP-'+(data.inlineReq.n||3)+'</span>'); }
+  pillsHost.innerHTML = pills.join(' ');
+  header.parentNode.appendChild(pillsHost);
 
   // Stats table
   const tbody = document.querySelector('#stats tbody');
@@ -149,7 +177,30 @@ export function htmlPage({ title, dataJson, generatedAt, params }) {
   const rows = [];
   if (alignedBase) rows.push(row('Baseline (Live)', alignedBase));
   aligned.forEach((s)=> rows.push(row(s.label || (s.jobId? ('#'+s.jobId):'overlay'), s)));
+  alignedInline.forEach((s)=> rows.push(row(s.label || 'inline', s)));
   tbody.innerHTML = rows.join('');
+
+  // Artifacts table
+  (function renderArtifacts(){
+    const m = data.artifactsByJobId || {};
+    const keys = Object.keys(m).sort((a,b)=> Number(a)-Number(b));
+    if (!keys.length) return;
+    const sec = document.createElement('section');
+    sec.className = 'card';
+    sec.innerHTML = '<h2 style="margin:0 0 8px;font-size:16px">Artifacts</h2><table id="arts"><thead><tr><th>Job</th><th>Artifact</th><th>Kind</th><th>Size</th><th>Download</th></tr></thead><tbody></tbody></table>';
+    const wrap = document.querySelector('.wrap');
+    const notes = wrap.querySelector('section.card:last-child');
+    wrap.insertBefore(sec, notes);
+    const tbodyA = sec.querySelector('tbody');
+    const fmtSize = n=> !n ? '-' : (n<1024? n+' B' : (n<1024*1024? (n/1024).toFixed(1)+' KB' : (n/1024/1024).toFixed(1)+' MB'));
+    const rowsA = [];
+    keys.forEach(jobId=>{
+      (m[jobId]||[]).forEach(a=>{
+        rowsA.push('<tr><td>#'+jobId+'</td><td>'+a.label+'</td><td>'+(a.kind||'-')+'</td><td>'+fmtSize(a.size_bytes||0)+'</td><td><a class="btn" href="'+a.download+'" target="_blank" rel="noopener">Download</a></td></tr>');
+      });
+    });
+    tbodyA.innerHTML = rowsA.join('');
+  })();
 
   // Buttons
   const qs = new URLSearchParams({

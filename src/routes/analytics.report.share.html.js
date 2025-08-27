@@ -1,4 +1,6 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import { db } from '../storage/db.js';
 import { htmlPage } from '../services/reportHtml.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from '../services/analyticsArtifacts.js';
@@ -15,6 +17,21 @@ async function loadSeries(jobIds){
     if (eq.length) out.push({ jobId: id, label: '#'+id, equity: eq });
   }
   return out;
+}
+
+async function loadArtifactsMap(jobIds){
+  const map = {};
+  for (const id of jobIds){
+    const arts = await listArtifacts(id);
+    map[id] = arts.map(a => ({
+      id: a.id,
+      kind: a.kind,
+      label: a.label || a.path,
+      size_bytes: a.size_bytes || 0,
+      download: `/jobs/${id}/artifacts/${a.id}/download`
+    }));
+  }
+  return map;
 }
 
 const router = express.Router();
@@ -36,8 +53,27 @@ router.get('/analytics/overlays/share/:token/report.html', async (req,res)=>{
     ds: 'none', n: undefined
   };
   const items = await loadSeries(ids);
-  const body = { jobIds: ids, items, baseline: null, params };
-  const etag = eTagOfJSON({ token: req.params.token, count: items.length, p: params });
+  const artifactsByJobId = await loadArtifactsMap(ids);
+
+  let inline = [];
+  if (payload.inline?.optimizeJobId){
+    try {
+      const arts = await listArtifacts(Number(payload.inline.optimizeJobId));
+      const j = arts.find(x => /optimize_topk_equity\.json$/i.test(x.path));
+      if (j){
+        const raw = JSON.parse(fs.readFileSync(path.resolve(j.path), 'utf8'));
+        inline = (raw || []).slice(0, payload.inline.n||3).map(it => ({
+          jobId: null,
+          label: it.label,
+          params: it.params || {},
+          equity: it.equity || []
+        }));
+      }
+    } catch (err) { /* ignore */ }
+  }
+
+  const body = { jobIds: ids, items, inline, artifactsByJobId, baseline: null, params, inlineReq: payload.inline || null };
+  const etag = eTagOfJSON({ token: req.params.token, count: items.length, inline: inline?.length||0, p: params });
   const now = Date.now();
   if (handleConditionalReq(req, res, etag, now)) {
     applyCacheHeaders(res, { etag, lastModified: now, maxAge: 600 });
