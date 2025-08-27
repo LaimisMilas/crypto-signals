@@ -19,6 +19,7 @@ export async function mount(root){
     <div style="display:flex;gap:8px;margin-top:8px">
       <button id="ov-report-zip" class="btn">Download Report (ZIP)</button>
       <button id="ov-report-zip-png" class="btn">Download Report + PNG</button>
+      <button id="ov-report-html" class="btn">Open HTML Report</button>
     </div>
     <div style="margin-top:12px;display:flex;gap:8px;align-items:end;flex-wrap:wrap">
       <div><label>Optimize job ID<br><input id="ov-top-id" style="width:100px"></label></div>
@@ -41,7 +42,7 @@ export async function mount(root){
 
   const el = id => root.querySelector(id);
   const input = { type: el('#ov-type'), symbol: el('#ov-symbol'), strategy: el('#ov-strategy'), topId: el('#ov-top-id'), topN: el('#ov-top-n'), tol: el('#ov-tol') };
-  const btn = { load: el('#ov-load'), apply: el('#ov-apply'), clear: el('#ov-clear'), export: el('#ov-export'), share: el('#ov-share'), reportZip: el('#ov-report-zip'), reportZipPng: el('#ov-report-zip-png'), topLoad: el('#ov-top-load'), topInline: el('#ov-top-inline') };
+  const btn = { load: el('#ov-load'), apply: el('#ov-apply'), clear: el('#ov-clear'), export: el('#ov-export'), share: el('#ov-share'), reportZip: el('#ov-report-zip'), reportZipPng: el('#ov-report-zip-png'), reportHtml: el('#ov-report-html'), topLoad: el('#ov-top-load'), topInline: el('#ov-top-inline') };
   const box = { jobs: el('#ov-jobs'), stats: el('#ov-stats'), top: el('#ov-top-results'), sets: el('#ov-set-list') };
   const chkBaseline = el('#ov-baseline');
   const selectAlign = el('#ov-align');
@@ -416,6 +417,20 @@ export async function mount(root){
     } catch(e){
       Toast.open({ title:'Report failed', description: e.message, variant:'error' });
     }
+  });
+  btn.reportHtml.addEventListener('click', ()=>{
+    const s = currentSelection();
+    if (!s.jobIds.length){ Toast.open({ title:'Pick at least one job', variant:'warning' }); return; }
+    const params = new URLSearchParams({
+      job_ids: s.jobIds.join(','),
+      baseline: s.baseline,
+      overlay_align: s.align,
+      overlay_rebase: s.rebase||'',
+      ds: 'lttb',
+      n: '1500'
+    });
+    const url = shareToken ? `/analytics/overlays/share/${shareToken}/report.html` : `/analytics/overlays/report.html?${params.toString()}`;
+    window.open(url, '_blank');
   });
   btn.topLoad.addEventListener('click', loadTopN);
   btn.topInline.addEventListener('click', loadTopNInline);
