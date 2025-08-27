@@ -1,0 +1,82 @@
+groups:
+- name: burnrate.api.availability
+  rules:
+  # Greitas išdegimas (page): 1h/5m langai, threshold ~14.4 (SRE praktika)
+  - alert: APIErrorBudgetBurnFast
+    expr: (
+      (sli:api_error_ratio:rate5m) / (1 - 0.995)
+    ) > 14.4
+    for: 5m
+    labels: { severity: page }
+    annotations:
+      summary: "API availability error budget greitai deginamas"
+      description: "Burn rate >14.4 (5m), SLO=99.5%"
+
+  # Lėtesnis išdegimas (ticket): 6h/30m langai, threshold ~6
+  - alert: APIErrorBudgetBurnSlow
+    expr: (
+      ( sum(rate(http_requests_total{status=~"5.."[30m])) / sum(rate(http_requests_total[30m])) ) / (1 - 0.995)
+    ) > 6
+    for: 2h
+    labels: { severity: ticket }
+    annotations:
+      summary: "API availability error budget lėtai deginamas"
+      description: "Burn rate >6 (30m), SLO=99.5%"
+
+- name: burnrate.api.latency
+  rules:
+  - alert: APILatencyBudgetBurnFast
+    expr: ( (1 - sli:api_latency_under_1s_ratio:rate5m) / (1 - 0.995) ) > 14.4
+    for: 5m
+    labels: { severity: page }
+    annotations:
+      summary: "API latency p95 > 1s (greitas burnas)"
+      description: "Burn rate (latency) >14.4"
+
+  - alert: APILatencyBudgetBurnSlow
+    expr: (
+      (1 - ( (sum(rate(http_request_duration_seconds_bucket{le="1"}[30m])) / sum(rate(http_request_duration_seconds_count[30m]))) )) / (1 - 0.995)
+    ) > 6
+    for: 2h
+    labels: { severity: ticket }
+    annotations:
+      summary: "API latency p95 > 1s (lėtas burnas)"
+      description: "Burn rate (latency) >6"
+
+- name: burnrate.sse
+  rules:
+  - alert: SSEAvailabilityBurnFast
+    expr: ( (1 - sli:sse_ping_delivery_ratio:rate5m) / (1 - 0.98) ) > 14.4
+    for: 10m
+    labels: { severity: page }
+    annotations:
+      summary: "SSE availability – greitas burnas"
+      description: "Ping delivery degradacija; SLO=98%"
+
+  - alert: SSEAvailabilityBurnSlow
+    expr: ( (1 - avg_over_time(sli:sse_ping_delivery_ratio:rate5m[30m])) / (1 - 0.98) ) > 6
+    for: 2h
+    labels: { severity: ticket }
+    annotations:
+      summary: "SSE availability – lėtas burnas"
+      description: "Ping delivery degradacija (30m)"
+
+- name: burnrate.jobs
+  rules:
+  - alert: JobsSuccessBurnFast
+    expr: ( (1 - sli:jobs_success_ratio:rate15m) / (1 - 0.99) ) > 14.4
+    for: 15m
+    labels: { severity: page }
+    annotations:
+      summary: "Jobs success – greitas burnas"
+      description: "Job fail’ai degina biudžetą greitai (15m)"
+
+  - alert: JobsSuccessBurnSlow
+    expr: (
+      (1 - avg_over_time(sli:jobs_success_ratio:rate15m[6h])) / (1 - 0.99)
+    ) > 6
+    for: 2h
+    labels: { severity: ticket }
+    annotations:
+      summary: "Jobs success – lėtas burnas"
+      description: "Ilgalaikis jobs degradavimas (6h)"

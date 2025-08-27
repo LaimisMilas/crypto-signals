@@ -2,6 +2,8 @@ global:
   scrape_interval: 15s
 rule_files:
   - alerts.yml
+  - recording-rules.yml
+  - alerts-burnrate.yml
 scrape_configs:
   - job_name: crypto-signals
     static_configs:
