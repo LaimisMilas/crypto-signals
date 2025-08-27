@@ -36,6 +36,8 @@ import analyticsOptimizeInlineRoutes from './routes/analytics.optimize.inline.js
 import analyticsOverlayRoutes from './routes/analytics-overlay.js';
 import analyticsOverlaySetsRoutes from './routes/analytics.overlay.sets.js';
 import analyticsReportRoutes from './routes/analytics.report.js';
+import analyticsReportHtmlRoutes from './routes/analytics.report.html.js';
+import analyticsReportShareHtmlRoutes from './routes/analytics.report.share.html.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
 import { debugObservRouter } from './routes/debug-observ.js';
 
@@ -86,6 +88,8 @@ app.use('/', analyticsJobsRoutes);
   app.use('/', analyticsOverlayRoutes);
   app.use('/', analyticsOverlaySetsRoutes);
   app.use('/', analyticsReportRoutes);
+  app.use('/', analyticsReportHtmlRoutes);
+  app.use('/', analyticsReportShareHtmlRoutes);
   sseRoutes(app);
   metricsRouter(app);
 
