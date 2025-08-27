@@ -1,4 +1,5 @@
 import { loadConfig, getState, setState, logHalt } from './state.js';
+import { noteRiskReject } from '../signal/instrumentation.js';
 
 function getLocalTime(timezone) {
   const parts = new Intl.DateTimeFormat('en-GB', {
@@ -53,8 +54,12 @@ export async function checkPreEntry(ctx) {
   const st = await getState();
 
   const ok = () => ({ ok: true });
-  const fail = (reason, details) => ({ ok: false, fail: true, reason, details });
+  const fail = (reason, details) => {
+    noteRiskReject({ strategy: ctx.strategy || 'unknown', reason });
+    return { ok: false, fail: true, reason, details };
+  };
   const halt = async (reason, details) => {
+    noteRiskReject({ strategy: ctx.strategy || 'unknown', reason });
     await setState({ state: 'HALTED', reason });
     await logHalt('HALT', reason, details || null);
     await scheduleResume(cfg);

@@ -10,6 +10,7 @@ import { loadExchangeFilters, roundPrice, ensureSymbolSettings } from './risk/li
 import { buildOrders } from './risk/orders.js';
 import { checkPreEntry } from './risk/guardrails.js';
 import { ensureDayStart, updateRealizedPnlToday } from './risk/state.js';
+import { noteSignal, noteSuppressed, noteMissingCandles, noteDataStaleness } from './signal/instrumentation.js';
 
 async function selectRecentCandles(client, symbol, limit = 500) {
   const { rows } = await client.query(
@@ -19,7 +20,7 @@ async function selectRecentCandles(client, symbol, limit = 500) {
        ORDER BY ts DESC
        LIMIT $2`, [symbol, limit]
   );
-  return rows.reverse().map(r => ({
+  const candles = rows.reverse().map(r => ({
     ts: Number(r.ts),
     open: Number(r.open),
     high: Number(r.high),
@@ -27,7 +28,19 @@ async function selectRecentCandles(client, symbol, limit = 500) {
     close: Number(r.close),
     volume: Number(r.volume),
   }));
+  const intervalSec = { '1m': 60, '3m': 180, '5m': 300 }[cfg.interval] || 60;
+  for (let i = 1; i < candles.length; i++) {
+    const diff = candles[i].ts - candles[i-1].ts;
+    if (diff > intervalSec) {
+      const gaps = Math.floor(diff / intervalSec) - 1;
+      if (gaps > 0) noteMissingCandles(symbol, cfg.interval, gaps);
+    }
+  }
+  const lastTs = candles[candles.length - 1]?.ts;
+  if (lastTs) noteDataStaleness(symbol, cfg.interval, Math.floor(Date.now()/1000 - lastTs));
+  return candles;
 }
+
 
 async function openTrade(client, { ts, side, price, strategyId, params, symbol }) {
   await client.query(
@@ -103,6 +116,7 @@ export async function runOnce(liveConfig) {
             exposureBySymbol,
             atrVolPct: (atr / lastClose) * 100,
             pingFailures: 0,
+            strategy: strat.id,
           };
           await ensureSymbolSettings(symbol, { leverage: cfg.leverage, positionMode: cfg.positionMode });
           const { qty, reason } = computePositionSize({
@@ -117,29 +131,32 @@ export async function runOnce(liveConfig) {
           ctx.qty = qty;
           ctx.notional = entryPrice * qty;
           const verdict = await checkPreEntry(ctx);
-          if (verdict.halt) {
-            console.log('Guardrails HALT', verdict.reason);
-            break;
-          }
-          if (verdict.fail) {
-            console.log('Trade skipped', verdict.reason);
-            continue;
-          }
-          if (qty > 0) {
-            const orders = buildOrders({ side, entryType: 'MARKET', entryPrice, qty, sl, tp, symbol });
-            try {
-              // entry first
-              await binance.send('POST', '/fapi/v1/order', orders[0], { signed: true });
-              // protective orders
-              await binance.send('POST', '/fapi/v1/order', orders[1], { signed: true });
-              await binance.send('POST', '/fapi/v1/order', orders[2], { signed: true });
-              await openTrade(client, { ts: last.ts, side, price: entryPrice, strategyId: strat.id, params, symbol });
-            } catch (e) {
-              console.error('Order error', e);
+            if (verdict.halt) {
+              console.log('Guardrails HALT', verdict.reason);
+              break;
             }
-          } else {
-            console.log('Trade skipped', reason);
-          }
+            if (verdict.fail) {
+              console.log('Trade skipped', verdict.reason);
+              noteSuppressed({ strategy: strat.id, reason: verdict.reason });
+              continue;
+            }
+            if (qty > 0) {
+              noteSignal({ strategy: strat.id, symbol, interval: cfg.interval, side });
+              const orders = buildOrders({ side, entryType: 'MARKET', entryPrice, qty, sl, tp, symbol });
+              try {
+                // entry first
+                await binance.send('POST', '/fapi/v1/order', orders[0], { signed: true });
+                // protective orders
+                await binance.send('POST', '/fapi/v1/order', orders[1], { signed: true });
+                await binance.send('POST', '/fapi/v1/order', orders[2], { signed: true });
+                await openTrade(client, { ts: last.ts, side, price: entryPrice, strategyId: strat.id, params, symbol });
+              } catch (e) {
+                console.error('Order error', e);
+              }
+            } else {
+              noteSuppressed({ strategy: strat.id, reason });
+              console.log('Trade skipped', reason);
+            }
         }
       }
     }
