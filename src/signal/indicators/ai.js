@@ -1,7 +1,7 @@
+import { timeIndicator } from '../instrumentation.js';
+
 export async function aiScore(candles) { /* ... RETURN: { value: <0..1> } */ }
 
-import { timeIndicator } from '../instrumentation.js';
-export function aiScoreInstrumented(meta) {
-  const { candles } = meta;
-  return timeIndicator({ ...meta, indicator: 'ai_score' }, aiScore, candles);
+export function aiScoreInstrumented({ candles, symbol, interval, strategy }) {
+  return timeIndicator({ indicator: 'ai_score', symbol, interval, strategy }, aiScore, candles);
 }
