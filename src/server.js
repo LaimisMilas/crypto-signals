@@ -38,6 +38,7 @@ import analyticsOverlaySetsRoutes from './routes/analytics.overlay.sets.js';
 import analyticsReportRoutes from './routes/analytics.report.js';
 import analyticsReportHtmlRoutes from './routes/analytics.report.html.js';
 import analyticsReportShareHtmlRoutes from './routes/analytics.report.share.html.js';
+import artifactsRoutes from './routes/artifacts.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
 import { debugObservRouter } from './routes/debug-observ.js';
 
@@ -78,6 +79,7 @@ portfolioRoutes(app);
 riskRoutes(app);
 configRoutes(app);
 jobsRoutes(app);
+app.use(artifactsRoutes);
 app.use('/binance', binanceRoutes);
 healthRoutes(app);
 app.use('/', analyticsJobsRoutes);
