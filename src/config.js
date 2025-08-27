@@ -1,4 +1,7 @@
 import 'dotenv/config';
+import path from 'path';
+
+export const ARTIFACTS_ROOT = path.resolve(process.env.ARTIFACTS_ROOT || './.artifacts');
 
 export const cfg = {
   port: process.env.PORT || 3000,
@@ -19,4 +22,5 @@ export const cfg = {
   tpAtrMult: Number(process.env.TP_ATR_MULT) || 3.0,
   leverage: Number(process.env.LEVERAGE) || 5,
   positionMode: process.env.POSITION_MODE || 'ONE_WAY',
+  artifactsRoot: ARTIFACTS_ROOT,
 };

@@ -24,7 +24,8 @@
     "opt": "node scripts/optimize.js",
     "signals": "node scripts/generate-signals.js",
     "wf": "node scripts/walkforward.js",
-    "wf:summary": "node scripts/wf-summary.js"
+    "wf:summary": "node scripts/wf-summary.js",
+    "artifacts:backfill": "node scripts/backfill-artifacts-size.js"
   },
   "dependencies": {
     "@opentelemetry/auto-instrumentations-node": "^0.62.1",
@@ -39,6 +40,7 @@
     "csv-parse": "^5.6.0",
     "dotenv": "^16.4.5",
     "escape-html": "^1.0.3",
+    "lru-cache": "^10.2.1",
     "express": "^4.19.2",
     "node-telegram-bot-api": "^0.66.0",
     "pg": "^8.16.3",

@@ -1,5 +1,4 @@
 import express from 'express';
-import path from 'path';
 import { db, listen } from '../storage/db.js';
 
 const router = express.Router();
@@ -58,17 +57,6 @@ router.get('/jobs/:id/logs', async (req, res) => {
   res.json(rows);
 });
 
-router.get('/jobs/:id/artifacts/:aid/download', async (req, res) => {
-  const id = Number(req.params.id);
-  const aid = Number(req.params.aid);
-  const { rows } = await db.query(
-    'SELECT path FROM job_artifacts WHERE job_id=$1 AND id=$2',
-    [id, aid]
-  );
-  if (!rows.length) return res.status(404).end();
-  const p = rows[0].path;
-  res.download(p, path.basename(p));
-});
 
 router.get('/jobs/stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
