@@ -1,10 +1,10 @@
 import fs from 'fs';
 import path from 'path';
-import LRU from 'lru-cache';
+import { LRUCache } from 'lru-cache';
 import crypto from 'crypto';
 import { ARTIFACTS_ROOT } from '../config.js';
 
-const metaCache = new LRU({ max: 500, ttl: 10 * 60 * 1000 });
+const metaCache = new LRUCache({ max: 500, ttl: 10 * 60 * 1000 });
 
 const MIME = new Map(Object.entries({
   '.csv': 'text/csv',
