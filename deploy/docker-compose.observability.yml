@@ -1,5 +1,18 @@
-version: '3.9'
 services:
+  postgres:
+    image: postgres:15-alpine
+    ports: ["5432:5432"]
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=app
+      - POSTGRES_DB=crypto
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d crypto"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.99.0
     command: ["--config=/etc/otel/collector-config.yaml"]
@@ -37,11 +50,20 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       DEPLOY_ENV: development
       SERVICE_NAMESPACE: crypto-signals
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: app
+      PGPASSWORD: app
+      PGDATABASE: crypto
     volumes:
       - ../logs:/app/logs
     depends_on:
-      - otel-collector
-      - loki
+      otel-collector:
+        condition: service_started
+      loki:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     ports:
       - '3000:3000'
   alertmanager:

@@ -1,5 +1,5 @@
 // src/live.js — paper trading with risk management
-import { Pool } from 'pg';
+import { db as pool } from './storage/db.js';
 import fsp from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,10 +11,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientPublicDir = path.join(__dirname, '..', 'client', 'public');
 const paramsPath = path.join(__dirname, '..', 'config', 'params.json');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
 
 const LOOP_MS = 60 * 1000;
 let loopTimer = null;
