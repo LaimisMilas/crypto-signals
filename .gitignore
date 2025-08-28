@@ -9,6 +9,7 @@ pnpm-debug.log*
 # Env
 .env
 .env.local
+deploy/.env
 
 # SQLite
 data.sqlite
