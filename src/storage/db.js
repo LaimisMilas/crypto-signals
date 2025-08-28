@@ -1,17 +1,26 @@
 import pkg from 'pg';
 const { Pool } = pkg;
 import { readFileSync } from 'fs';
-import { cfg } from '../config.js';
 
-const connectionString = cfg.dbUrl;
-if (!connectionString) {
-  throw new Error('Missing DATABASE_URL environment variable');
+const conn = process.env.DATABASE_URL;
+
+export const db = conn
+  ? new Pool({
+      connectionString: conn,
+      ssl: { rejectUnauthorized: false },
+    })
+  : new Pool({
+      host: process.env.PGHOST,
+      port: +(process.env.PGPORT || 5432),
+      user: process.env.PGUSER,
+      password: process.env.PGPASSWORD,
+      database: process.env.PGDATABASE,
+      ssl: { rejectUnauthorized: false },
+    });
+
+if (!conn && !process.env.PGHOST) {
+  throw new Error('Missing DATABASE_URL or PG* environment variables');
 }
-
-export const db = new Pool({
-  connectionString,
-  ssl: { rejectUnauthorized: false },
-});
 
 // Subscribe to PostgreSQL LISTEN/NOTIFY channel
 // Returns a function that releases the listener
