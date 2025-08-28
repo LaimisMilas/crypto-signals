@@ -10,7 +10,7 @@ scrape_configs:
       - targets: ['prometheus:9090']
   - job_name: api
     static_configs:
-      - targets: ['api:3000']
+      - targets: ['deploy-api:3000']
   - job_name: otel-collector
     static_configs:
       - targets: ['otel-collector:8888']
