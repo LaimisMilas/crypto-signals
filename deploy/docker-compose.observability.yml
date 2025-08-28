@@ -8,10 +8,7 @@ services:
     volumes:
       - ./pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app -d crypto"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+      test: [ "CMD-SHELL", "pg_isready -U laimonas -d crypto_signals" ]
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.99.0
     command: ["--config=/etc/otel/collector-config.yaml"]
@@ -79,7 +76,7 @@ services:
       - ../.env.observability
   prometheus:
     image: prom/prometheus
-    command: ['--config.file=/etc/prometheus/prometheus.yml', '--web.enable-lifecycle', '--alertmanager.url=http://alertmanager:9093']
+    command: [ '--config.file=/etc/prometheus/prometheus.yml','--web.enable-lifecycle' ]
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
@@ -97,7 +94,6 @@ services:
       - prometheus
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
-      - ./grafana/dashboards:/etc/grafana/dashboards
 volumes:
   loki-data:
   # logs volume for deploy-api container

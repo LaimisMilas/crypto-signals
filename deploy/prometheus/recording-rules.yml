@@ -1,15 +1,10 @@
 groups:
-- name: sli.records
+- name: api-latency
   rules:
-  - record: sli:api_error_ratio:rate5m
-    expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))
-
-  - record: sli:api_latency_under_1s_ratio:rate5m
-    expr: (sum(rate(http_request_duration_seconds_bucket{le="1"}[5m])) by ()) / (sum(rate(http_request_duration_seconds_count[5m])) by ())
-
-  - record: sli:sse_ping_delivery_ratio:rate5m
-    expr: clamp_max(rate(sse_events_sent_total{event="ping"}[5m]) / ((avg_over_time(sse_connections[5m])) / 15), 1)
-
-  - record: sli:jobs_success_ratio:rate15m
-    expr: 1 - (sum(rate(job_duration_seconds_count{status="err"}[15m])) / sum(rate(job_duration_seconds_count[15m])))
-
+  - record: route:http_request_duration_seconds:p95
+    expr: histogram_quantile(
+        0.95,
+        sum by (le,route) (
+          rate(http_request_duration_seconds_bucket{job="api",route!="/metrics"}[5m])
+        )
+      )
