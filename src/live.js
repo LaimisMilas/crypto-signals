@@ -1,5 +1,5 @@
 // src/live.js — paper trading with risk management
-import { db as pool } from './storage/db.js';
+import { getDbPool, isDbReady } from './storage/db.js';
 import fsp from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,6 +14,11 @@ const paramsPath = path.join(__dirname, '..', 'config', 'params.json');
 
 const LOOP_MS = 60 * 1000;
 let loopTimer = null;
+
+const pool = getDbPool();
+if (!isDbReady()) {
+  console.warn('[live] DB not ready yet; continue startup (degraded) until connected');
+}
 
 const CFG_DEFAULTS = {
   tpPct: 0.02,
@@ -323,13 +328,17 @@ export async function getLiveState() {
 
 // start loop if running after restart
 (async () => {
-  const client = await pool.connect();
   try {
-    const state = await getState(client);
-    if (state.running && !loopTimer) {
-      loopTimer = setInterval(step, LOOP_MS);
+    const client = await pool.connect();
+    try {
+      const state = await getState(client);
+      if (state.running && !loopTimer) {
+        loopTimer = setInterval(step, LOOP_MS);
+      }
+    } finally {
+      client.release();
     }
-  } finally {
-    client.release();
+  } catch (e) {
+    console.error('[live] init query failed (non-fatal)', e.code || e.message);
   }
 })();

@@ -48,6 +48,12 @@ const app = express();
 // Alias db pool for clarity
 const pool = db;
 
+console.log('[server] DB config', {
+  hasUrl: Boolean(process.env.DATABASE_URL),
+  host: process.env.PGHOST,
+  db: process.env.PGDATABASE
+});
+
 if (process.env.DEBUG_OBSERV === '1') {
   app.use(debugObservRouter);
 }
