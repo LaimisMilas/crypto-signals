@@ -97,8 +97,7 @@ services:
       - prometheus
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
-      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./grafana/provisioning/dashboards/obs.yaml:/etc/grafana/provisioning/dashboards/obs.yaml
+      - ./grafana/dashboards:/etc/grafana/dashboards
 volumes:
   loki-data:
   # logs volume for deploy-api container

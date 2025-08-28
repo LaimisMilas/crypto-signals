@@ -3,6 +3,8 @@ providers:
   - name: Observability
     folder: Observability
     type: file
-    updateIntervalSeconds: 10
+    disableDeletion: false
+    allowUiUpdates: true
     options:
-      path: /etc/grafana/provisioning/dashboards
+      path: /etc/grafana/dashboards
+
