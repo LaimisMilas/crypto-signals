@@ -27,10 +27,13 @@ services:
   #     - ./promtail/promtail-config.yaml:/etc/promtail/config.yaml
   #     - ../logs:/var/log/app
   #   command: ["-config.file=/etc/promtail/config.yaml"]
-  api:
+  deploy-api:
     build:
       context: ..
+      dockerfile: Dockerfile
+    image: crypto-signals/deploy-api:local
     environment:
+      NODE_ENV: production
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       DEPLOY_ENV: development
       SERVICE_NAMESPACE: crypto-signals
@@ -75,5 +78,5 @@ services:
       - ./grafana/provisioning/dashboards/obs.yaml:/etc/grafana/provisioning/dashboards/obs.yaml
 volumes:
   loki-data:
-  # logs volume for api container
+  # logs volume for deploy-api container
   # host path ../logs mounted

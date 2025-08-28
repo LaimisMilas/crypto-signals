@@ -30,7 +30,11 @@
     "prom:check:min": "docker run --rm -v \"$PWD/deploy/prometheus:/etc/prometheus\" --entrypoint /bin/promtool prom/prometheus:latest check rules /etc/prometheus/alerts.yml",
     "stack:up": "docker compose -f deploy/docker-compose.observability.yml up -d prometheus alertmanager grafana",
     "stack:logs": "docker compose -f deploy/docker-compose.observability.yml logs -f prometheus",
-    "prom:check:flex": "./scripts/promtool.sh"
+    "prom:check:flex": "./scripts/promtool.sh",
+    "deploy-api:build": "docker compose -f deploy/docker-compose.observability.yml build --pull --no-cache deploy-api",
+    "deploy-api:up": "docker compose -f deploy/docker-compose.observability.yml up -d --no-deps --force-recreate deploy-api",
+    "deploy-api:rebuild": "npm run deploy-api:build && npm run deploy-api:up",
+    "deploy-api:logs": "docker compose -f deploy/docker-compose.observability.yml logs -f deploy-api"
   },
   "dependencies": {
     "@opentelemetry/auto-instrumentations-node": "^0.62.1",
