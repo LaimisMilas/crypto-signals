@@ -5,6 +5,6 @@ groups:
     expr: histogram_quantile(
         0.95,
         sum by (le,route) (
-          rate(http_request_duration_seconds_bucket{job="api",route!="/metrics"}[5m])
+          rate(http_request_duration_seconds_bucket{job="api",route!="/metrics"}[30m])
         )
       )
