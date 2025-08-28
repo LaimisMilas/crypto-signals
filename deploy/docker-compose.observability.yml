@@ -45,6 +45,8 @@ services:
       context: ..
       dockerfile: Dockerfile
     image: crypto-signals/deploy-api:local
+    env_file:
+      - ./deploy/.env
     environment:
       NODE_ENV: production
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
@@ -52,9 +54,9 @@ services:
       SERVICE_NAMESPACE: crypto-signals
       PGHOST: postgres
       PGPORT: 5432
-      PGUSER: app
-      PGPASSWORD: app
-      PGDATABASE: crypto
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      PGDATABASE: ${PGDATABASE}
     volumes:
       - ../logs:/app/logs
     depends_on:
