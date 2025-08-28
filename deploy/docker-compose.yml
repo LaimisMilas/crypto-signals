@@ -4,7 +4,7 @@ services:
   app:
     image: ghcr.io/laimismilas/crypto-signals:latest
     env_file:
-      - .env
+      - deploy/.env
     restart: unless-stopped
     networks: [web]
     healthcheck:
