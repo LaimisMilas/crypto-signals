@@ -1,0 +1,9 @@
+groups:
+- name: smoke
+  rules:
+  - alert: AlwaysFiring
+    expr: vector(1)
+    labels:
+      severity: warning
+    annotations:
+      summary: "Smoke test — this should appear in Alertmanager"
