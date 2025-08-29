@@ -1,9 +1,7 @@
 global:
   scrape_interval: 15s
 rule_files:
-  - /etc/prometheus/alerts.yml
-  - /etc/prometheus/recording-rules.yml
-  - /etc/prometheus/alerts-burnrate.yml
+  ["/etc/prometheus/rules/*.yml"]
 alerting:
   alertmanagers:
     - static_configs:

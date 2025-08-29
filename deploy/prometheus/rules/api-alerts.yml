@@ -1,0 +1,28 @@
+groups:
+  - name: api
+    interval: 30s
+    rules:
+      - alert: APIHighErrorRate
+        expr: 100 * (
+          sum by (route)(rate(http_request_duration_seconds_count{job="api",route!="/metrics",status!~"2.."}[5m]))
+          /
+          sum by (route)(rate(http_request_duration_seconds_count{job="api",route!="/metrics"}[5m]))
+          ) > 1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate ({{ $labels.route }})"
+          description: "Non-2xx > 1% (5m) on {{ $labels.route }}"
+
+      - alert: APIP95LatencyHigh
+        expr: histogram_quantile(
+          0.95,
+          sum by (le,route)(rate(http_request_duration_seconds_bucket{job="api",route!="/metrics"}[5m]))
+          ) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency ({{ $labels.route }})"
+          description: "p95 > 200ms (5m) on {{ $labels.route }}"
