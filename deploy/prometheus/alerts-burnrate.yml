@@ -1,33 +1,10 @@
 groups:
-- name: burnrate.api
+- name: smoke
   rules:
-  - alert: APIErrorBudgetBurnFast
-    expr: (sli:api_error_ratio:rate5m)/(1-0.995) > 14.4
-    for: 5m
-    labels: { severity: page }
+  - alert: AlwaysFiring
+    expr: vector(1)
+    for: 0m
+    labels:
+      severity: warning
     annotations:
-      summary: "API availability burn (fast)"
-  - alert: APILatencyBudgetBurnFast
-    expr: (1 - sli:api_latency_under_1s_ratio:rate5m)/(1-0.995) > 14.4
-    for: 5m
-    labels: { severity: page }
-    annotations:
-      summary: "API latency burn (fast)"
-
-- name: burnrate.sse
-  rules:
-  - alert: SSEAvailabilityBurnFast
-    expr: (1 - sli:sse_ping_delivery_ratio:rate5m)/(1-0.98) > 14.4
-    for: 10m
-    labels: { severity: page }
-    annotations:
-      summary: "SSE availability burn (fast)"
-
-- name: burnrate.jobs
-  rules:
-  - alert: JobsSuccessBurnFast
-    expr: (1 - sli:jobs_success_ratio:rate15m)/(1-0.99) > 14.4
-    for: 15m
-    labels: { severity: page }
-    annotations:
-      summary: "Jobs success burn (fast)"
+      summary: "Smoke test — this should appear in Alertmanager"
