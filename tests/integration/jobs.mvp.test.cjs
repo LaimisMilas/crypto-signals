@@ -17,13 +17,9 @@ beforeAll(async () => {
 }, 60000);
 
 afterAll(async () => {
-  try {
-    if (app && typeof app.shutdown === 'function') await app.shutdown();
-  } catch {}
-  try {
-    if (pgEnv) await pgEnv.container.stop();
-  } catch {}
-}, 60000);
+  await app?.shutdown?.();
+  await pgEnv?.container.stop();
+}, 10000);
 
 test('backtest job runs and produces artifact', async () => {
   const res = await request(app).post('/jobs/backtest').send({ symbol: 'BTCUSDT', from_ms: 0, to_ms: 4000, strategy: 'demo' });
