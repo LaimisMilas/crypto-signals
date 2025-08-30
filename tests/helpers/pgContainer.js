@@ -1,29 +1,66 @@
 import { GenericContainer } from 'testcontainers';
 import { Client } from 'pg';
-import fs from 'fs';
-import path from 'path';
-import { globSync } from 'glob';
 
-async function runSqlFiles(client, dir) {
-  const files = globSync('*.sql', { cwd: dir }).sort();
-  for (const f of files) {
-    const sql = fs.readFileSync(path.join(dir, f), 'utf8');
-    await client.query(sql);
-  }
-}
-
-async function seedBasic(client) {
+async function createMinimalSchema(client) {
+  // candles table with unique symbol+ts and helpful indexes
   await client.query(`
     CREATE TABLE IF NOT EXISTS candles(
-      ts BIGINT PRIMARY KEY,
+      id SERIAL PRIMARY KEY,
+      ts BIGINT NOT NULL,
       open DOUBLE PRECISION,
       high DOUBLE PRECISION,
       low DOUBLE PRECISION,
       close DOUBLE PRECISION,
       volume DOUBLE PRECISION,
-      symbol TEXT NOT NULL
+      symbol TEXT NOT NULL,
+      UNIQUE(symbol, ts)
+    );
+    CREATE INDEX IF NOT EXISTS idx_candles_symbol_ts ON candles(symbol, ts);
+    CREATE INDEX IF NOT EXISTS idx_candles_ts ON candles(ts);
+  `);
+
+  // artifacts table used by artifacts API
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS job_artifacts(
+      id BIGSERIAL PRIMARY KEY,
+      job_id BIGINT NOT NULL,
+      kind TEXT,
+      label TEXT,
+      path TEXT NOT NULL,
+      size_bytes BIGINT,
+      remote_url TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_job_artifacts_job ON job_artifacts(job_id);
+  `);
+
+  // paper trades table for analytics/portfolio
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS paper_trades(
+      id SERIAL PRIMARY KEY,
+      symbol TEXT NOT NULL,
+      side TEXT NOT NULL,
+      qty DOUBLE PRECISION NOT NULL,
+      entry_price DOUBLE PRECISION NOT NULL,
+      pnl DOUBLE PRECISION,
+      strategy TEXT,
+      closed_at BIGINT
     );
   `);
+
+  // live baseline snapshots
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS equity_snapshots(
+      ts BIGINT PRIMARY KEY,
+      equity DOUBLE PRECISION NOT NULL,
+      source TEXT NOT NULL DEFAULT 'live',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_equity_snapshots_ts ON equity_snapshots(ts);
+    CREATE INDEX IF NOT EXISTS idx_equity_snapshots_source_ts ON equity_snapshots(source, ts);
+  `);
+}
+
+async function seedBasic(client) {
   await client.query(`
     INSERT INTO candles(ts, open, high, low, close, volume, symbol)
     VALUES
@@ -37,18 +74,6 @@ async function seedBasic(client) {
   `);
 
   await client.query(`
-    CREATE TABLE IF NOT EXISTS paper_trades(
-      id SERIAL PRIMARY KEY,
-      symbol TEXT NOT NULL,
-      side TEXT NOT NULL,
-      qty DOUBLE PRECISION NOT NULL,
-      entry_price DOUBLE PRECISION NOT NULL,
-      pnl DOUBLE PRECISION,
-      strategy TEXT,
-      closed_at BIGINT
-    );
-  `);
-  await client.query(`
     INSERT INTO paper_trades(symbol,side,qty,entry_price,pnl,strategy,closed_at) VALUES
       ('BTCUSDT','LONG', 0.5, 100, 10, 'ema', 2000),
       ('ETHUSDT','SHORT',1.0, 55,  -5, 'adx',  3000);
@@ -56,14 +81,6 @@ async function seedBasic(client) {
       ('BTCUSDT','LONG', 0.2, 110, 'ema');
   `);
 
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS equity_snapshots(
-      ts BIGINT PRIMARY KEY,
-      equity DOUBLE PRECISION NOT NULL,
-      source TEXT NOT NULL DEFAULT 'live',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-  `);
   await client.query(`
     INSERT INTO equity_snapshots(ts,equity,source) VALUES
       (1000,1000,'live'),(2000,1040,'live'),(3000,1085,'live')
@@ -73,12 +90,12 @@ async function seedBasic(client) {
 
 export async function startPgWithSchema() {
   const container = await new GenericContainer('postgres:15-alpine')
-    .withExposedPorts(5432)
     .withEnvironment({
       POSTGRES_PASSWORD: 'test',
       POSTGRES_USER: 'test',
       POSTGRES_DB: 'cs_test'
     })
+    .withExposedPorts(5432)
     .start();
 
   const host = container.getHost();
@@ -88,21 +105,8 @@ export async function startPgWithSchema() {
   const client = new Client({ connectionString: url });
   await client.connect();
 
-  const root = process.cwd();
-  const schemaFile = path.resolve(root, 'src/storage/schema.pg.sql');
-  if (fs.existsSync(schemaFile)) {
-    const schemaSql = fs.readFileSync(schemaFile, 'utf8');
-    await client.query(schemaSql);
-  }
-
-  const migDirs = [
-    path.resolve(root, 'src/storage/migrations'),
-    path.resolve(root, 'migrations')
-  ];
-  for (const dir of migDirs) {
-    if (fs.existsSync(dir)) await runSqlFiles(client, dir);
-  }
-
+  // Use minimal schema setup for tests instead of project migrations
+  await createMinimalSchema(client);
   await seedBasic(client);
   await client.end();
 
