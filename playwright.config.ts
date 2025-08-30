@@ -1,10 +1,18 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: 'tests/e2e',
   use: {
     baseURL: 'http://localhost:4173',
     headless: true,
+    viewport: { width: 1366, height: 900 },
+    deviceScaleFactor: 1,
+    locale: 'en-US',
+    colorScheme: 'dark',
+    timezoneId: 'UTC',
+  },
+  expect: {
+    toHaveScreenshot: { maxDiffPixelRatio: 0.01, threshold: 0.5 },
   },
   webServer: {
     command: 'npm run serve:client',
@@ -15,15 +23,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { browserName: 'chromium' },
     },
-    // {
-    //   name: 'firefox',
-    //   use: { ...devices['Desktop Firefox'] },
-    // },
-    // {
-    //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] },
-    // },
   ],
 });

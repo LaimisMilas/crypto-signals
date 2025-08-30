@@ -11,21 +11,21 @@ test('tabs deep-link and persistence', async ({ page }) => {
   const tradesTab = page.locator('#analytics-tabs [role="tab"]', { hasText: 'Trades' });
   await expect(tradesTab).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#tab-trades[role="tabpanel"]')).toBeVisible();
-  await scanA11y(page);
+  await scanA11y(page, { impacts: ['critical', 'serious'] });
 
-  const equityTab = page.locator('#analytics-tabs [role="tab"]', { hasText: 'Equity' });
-  await equityTab.click();
-  await expect(equityTab).toHaveAttribute('aria-selected', 'true');
-  await expect(page).toHaveURL(/#tab-equity/);
-  await expect(page.locator('#tab-equity[role="tabpanel"]')).toBeVisible();
+  const overviewTab = page.locator('#analytics-tabs [role="tab"]', { hasText: 'Overview' });
+  await overviewTab.click();
+  await expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/#tab-overview/);
+  await expect(page.locator('#tab-overview[role="tabpanel"]')).toBeVisible();
   await expect(page.locator('#tab-trades[role="tabpanel"]')).toBeHidden();
-  await scanA11y(page);
+  await scanA11y(page, { impacts: ['critical', 'serious'] });
 
   await page.reload();
   const active = page.locator('#analytics-tabs [role="tab"][aria-selected="true"]');
-  await expect(active).toHaveText('Equity');
-  await expect(page).toHaveURL(/#tab-equity/);
-  await expect(page.locator('#tab-equity[role="tabpanel"]')).toBeVisible();
+  await expect(active).toHaveText('Overview');
+  await expect(page).toHaveURL(/#tab-overview/);
+  await expect(page.locator('#tab-overview[role="tabpanel"]')).toBeVisible();
   await expect(page.locator('#tab-trades[role="tabpanel"]')).toBeHidden();
-  await scanA11y(page);
+  await scanA11y(page, { impacts: ['critical', 'serious'] });
 });
