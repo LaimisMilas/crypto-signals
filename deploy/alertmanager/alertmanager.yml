@@ -27,7 +27,7 @@ receivers:
 
   - name: 'email-admin'
     email_configs:
-      - to: 'laimis.milasius@gmail.com'
+      - to: ''
         send_resolved: true
 
 inhibit_rules:
