@@ -1,25 +1,21 @@
-name: CI
+name: ci
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main, develop, feat/** ]
   pull_request:
-    branches: [ "main" ]
-
 jobs:
-  ci:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-      - name: Install
-        run: npm ci
-      - name: Lint
-        run: npm run lint || true
-      - name: Tests
-        run: npm test
-      - name: Build
-        run: npm run build || true
-      - name: Docker build
-        run: docker build -t crypto-signals:test .
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run test:cov
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage

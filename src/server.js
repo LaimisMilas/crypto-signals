@@ -674,7 +674,7 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-async function start() {
+export async function start() {
   await startOtel();
   app.listen(PORT, () => {
     logger.info(`Server running on :${PORT}`);
@@ -684,7 +684,6 @@ async function start() {
     import('./jobs/worker.js').then(m => m.startWorker());
   }
 }
-
 export default app;
 
 if (process.env.NODE_ENV !== 'test') {
