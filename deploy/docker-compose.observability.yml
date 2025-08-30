@@ -71,7 +71,10 @@ services:
       - '9093:9093'
     volumes:
       - ./alertmanager:/etc/alertmanager
-    command: ['--config.file=/etc/alertmanager/alertmanager.yml']
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml","--config.expand-env"]
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_PRIVATE_CHAT_ID: ${TELEGRAM_PRIVATE_CHAT_ID}
     env_file:
       - ../.env.observability
   prometheus:
@@ -82,6 +85,7 @@ services:
       - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
       - ./prometheus/recording-rules.yml:/etc/prometheus/recording-rules.yml
       - ./prometheus/alerts-burnrate.yml:/etc/prometheus/alerts-burnrate.yml
+      - ./prometheus/rules:/etc/prometheus/rules
     ports:
       - '9090:9090'
     depends_on:

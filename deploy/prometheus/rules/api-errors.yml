@@ -1,0 +1,12 @@
+groups:
+  - name: api-errors
+    rules:
+      - alert: APIHighErrorRate
+        expr: |
+          (sum(rate(http_request_duration_seconds_count{job="api",route!="/metrics",status=~"5.."}[5m])) /
+           sum(rate(http_request_duration_seconds_count{job="api",route!="/metrics"}[5m]))) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API error rate > 5% (5m)"

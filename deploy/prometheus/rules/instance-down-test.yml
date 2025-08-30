@@ -1,0 +1,10 @@
+groups:
+- name: uptime-test
+  rules:
+  - alert: OTelCollectorDown
+    expr: up{job="otel-collector"} == 0
+    for: 0m
+    labels:
+      severity: critical
+    annotations:
+      summary: "otel-collector is down"

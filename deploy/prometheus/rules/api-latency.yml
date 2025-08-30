@@ -7,4 +7,4 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: "API p95 latency > 200ms 5 min."
+      summary: "API p95 latency > 200ms (5m)"
