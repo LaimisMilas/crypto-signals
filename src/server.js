@@ -446,8 +446,7 @@ app.get('/analytics', async (req, res) => {
     const { rows: dbRows } = await db.query(q, [fromMs, toMs, symbol, strategy, paramsObj ? JSON.stringify(paramsObj) : null]);
     rows = dbRows;
   } catch (e) {
-    console.error('[/analytics] db error:', e);
-    return res.status(500).json({ error: 'db_error' });
+    req.log?.warn?.({ code: e.code, msg: e.message }, 'analytics_db_optional_failed');
   }
 
   const closedTrades = rows.map(r => ({

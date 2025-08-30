@@ -43,8 +43,11 @@ async function createMinimalSchema(client) {
       entry_price DOUBLE PRECISION NOT NULL,
       pnl DOUBLE PRECISION,
       strategy TEXT,
+      opened_at BIGINT,
       closed_at BIGINT
     );
+    CREATE INDEX IF NOT EXISTS idx_pt_closed ON paper_trades(closed_at);
+    CREATE INDEX IF NOT EXISTS idx_pt_opened ON paper_trades(opened_at);
   `);
 
   // live baseline snapshots
@@ -74,11 +77,11 @@ async function seedBasic(client) {
   `);
 
   await client.query(`
-    INSERT INTO paper_trades(symbol,side,qty,entry_price,pnl,strategy,closed_at) VALUES
-      ('BTCUSDT','LONG', 0.5, 100, 10, 'ema', 2000),
-      ('ETHUSDT','SHORT',1.0, 55,  -5, 'adx',  3000);
-    INSERT INTO paper_trades(symbol,side,qty,entry_price,strategy) VALUES
-      ('BTCUSDT','LONG', 0.2, 110, 'ema');
+    INSERT INTO paper_trades(symbol,side,qty,entry_price,pnl,strategy,opened_at,closed_at) VALUES
+      ('BTCUSDT','LONG', 0.5, 100, 10, 'ema', 1500, 2000),
+      ('ETHUSDT','SHORT',1.0, 55, -5, 'adx', 2500, 3000);
+    INSERT INTO paper_trades(symbol,side,qty,entry_price,strategy,opened_at) VALUES
+      ('BTCUSDT','LONG', 0.2, 110, 'ema', 2800);
   `);
 
   await client.query(`

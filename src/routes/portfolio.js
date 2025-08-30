@@ -4,14 +4,17 @@ import { latestPrices } from '../services/marketData.js';
 
 const router = express.Router();
 
-function daterangeDefaults(q) {
-  const to = q.to ? new Date(Number(q.to) || q.to) : new Date();
-  const from = q.from ? new Date(Number(q.from) || q.from) : new Date(to.getTime() - 30 * 24 * 3600 * 1000);
-  return { from, to };
+function parseRangeMs(q) {
+  const toMs = Number(q.to_ms ?? Date.now());
+  const fromMs = Number(q.from_ms ?? (toMs - 30 * 24 * 3600 * 1000));
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return null;
+  return { fromMs, toMs };
 }
 
 router.get('/portfolio', async (req, res) => {
-  const { from, to } = daterangeDefaults(req.query);
+  const range = parseRangeMs(req.query);
+  if (!range) return res.status(400).json({ error: 'invalid_time_range' });
+  const { fromMs, toMs } = range;
 
   const openQ = await db.query(`
     SELECT symbol,
@@ -67,14 +70,14 @@ router.get('/portfolio', async (req, res) => {
     WHERE closed_at BETWEEN $1 AND $2
     GROUP BY symbol
     ORDER BY SUM(pnl) DESC
-  `, [from, to]);
+  `, [fromMs, toMs]);
   const attrStr = await db.query(`
     SELECT COALESCE(strategy,'default') AS strategy, SUM(pnl) AS pnl
     FROM paper_trades
     WHERE closed_at BETWEEN $1 AND $2
     GROUP BY strategy
     ORDER BY SUM(pnl) DESC
-  `, [from, to]);
+  `, [fromMs, toMs]);
 
   const retQ = await db.query(`
     WITH r AS (
@@ -156,7 +159,9 @@ router.get('/portfolio/correlation', async (req, res) => {
 });
 
 router.get('/portfolio/attribution', async (req, res) => {
-  const { from, to } = daterangeDefaults(req.query);
+  const range = parseRangeMs(req.query);
+  if (!range) return res.status(400).json({ error: 'invalid_time_range' });
+  const { fromMs, toMs } = range;
   const groupBy = (req.query.groupBy === 'strategy') ? 'strategy' : 'symbol';
   const col = groupBy === 'strategy' ? "COALESCE(strategy,'default')" : 'symbol';
   const { rows } = await db.query(`
@@ -165,7 +170,7 @@ router.get('/portfolio/attribution', async (req, res) => {
     WHERE closed_at BETWEEN $1 AND $2
     GROUP BY ${col}
     ORDER BY SUM(pnl) DESC
-  `, [from, to]);
+  `, [fromMs, toMs]);
   res.json({ groupBy, items: rows });
 });
 
