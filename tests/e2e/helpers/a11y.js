@@ -14,8 +14,10 @@ export async function scanA11y(page, { impacts = ['critical','serious'] } = {}) 
   if (filtered.length) {
     console.error('[a11y] Violations:',
       filtered.map(v => ({
-        id: v.id, impact: v.impact, description: v.description,
-        nodes: (v.nodes||[]).flatMap(n => n.target)
+        id: v.id,
+        impact: v.impact,
+        description: v.description,
+        nodes: (v.nodes || []).flatMap(n => n.target),
       }))
     );
   }
