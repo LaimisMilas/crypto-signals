@@ -67,29 +67,38 @@ router.get('/portfolio', async (req, res) => {
   const attrSym = await db.query(`
     SELECT symbol, SUM(pnl) AS pnl
     FROM paper_trades
-    WHERE closed_at BETWEEN $1 AND $2
+    WHERE closed_at IS NOT NULL AND closed_at BETWEEN $1::bigint AND $2::bigint
     GROUP BY symbol
     ORDER BY SUM(pnl) DESC
   `, [fromMs, toMs]);
   const attrStr = await db.query(`
     SELECT COALESCE(strategy,'default') AS strategy, SUM(pnl) AS pnl
     FROM paper_trades
-    WHERE closed_at BETWEEN $1 AND $2
+    WHERE closed_at IS NOT NULL AND closed_at BETWEEN $1::bigint AND $2::bigint
     GROUP BY strategy
     ORDER BY SUM(pnl) DESC
   `, [fromMs, toMs]);
 
   const retQ = await db.query(`
-    WITH r AS (
-      SELECT symbol,
-             (close / LAG(close) OVER (PARTITION BY symbol ORDER BY ts) - 1) AS ret
+    WITH c AS (
+      SELECT symbol, ts, close
       FROM candles
-      WHERE ts >= (extract(epoch from now())*1000 - 30*24*3600*1000)
+      WHERE ts BETWEEN $1::bigint AND $2::bigint
+    ),
+    r AS (
+      SELECT symbol, ts, close,
+             (close / NULLIF(LAG(close) OVER (PARTITION BY symbol ORDER BY ts), 0) - 1) AS ret
+      FROM c
     )
-    SELECT symbol, STDDEV_POP(ret) AS sigma
-    FROM r WHERE ret IS NOT NULL GROUP BY symbol
-  `);
-  const sigma = Object.fromEntries(retQ.rows.map(r => [r.symbol, Number(r.sigma || 0)]));
+    SELECT symbol,
+           AVG(ret) FILTER (WHERE ret IS NOT NULL) AS avg_ret,
+           STDDEV_POP(ret) FILTER (WHERE ret IS NOT NULL) AS vol,
+           COUNT(*) FILTER (WHERE ret IS NOT NULL) AS n
+    FROM r
+    GROUP BY symbol
+    ORDER BY symbol
+  `, [fromMs, toMs]);
+  const sigma = Object.fromEntries(retQ.rows.map(r => [r.symbol, Number(r.vol || 0)]));
 
   const gross = holdings.reduce((s, h) => s + Math.abs(h.market_value), 0);
   const net = holdings.reduce((s, h) => s + h.market_value, 0);
@@ -167,7 +176,7 @@ router.get('/portfolio/attribution', async (req, res) => {
   const { rows } = await db.query(`
     SELECT ${col} AS key, SUM(pnl) AS pnl, COUNT(*) AS n
     FROM paper_trades
-    WHERE closed_at BETWEEN $1 AND $2
+    WHERE closed_at IS NOT NULL AND closed_at BETWEEN $1::bigint AND $2::bigint
     GROUP BY ${col}
     ORDER BY SUM(pnl) DESC
   `, [fromMs, toMs]);
