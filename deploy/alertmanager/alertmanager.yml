@@ -1,9 +1,9 @@
 global:
   resolve_timeout: 5m
   smtp_smarthost: 'smtp.gmail.com:587'
-  smtp_from: 'laimis.milasius@gmail.com'
-  smtp_auth_username: 'laimis.milasius@gmail.com'
-  smtp_auth_password: 'qwaq kkvu wydj qzuz'
+  smtp_from: ''
+  smtp_auth_username: ''
+  smtp_auth_password: ''
   smtp_require_tls: true
 
 route:
@@ -20,14 +20,14 @@ route:
 receivers:
   - name: 'telegram-private'
     telegram_configs:
-      - bot_token: '8483754693:AAGT2Ppln1gljSuIynrrQJFTez-ZzzzxL_I'
-        chat_id: -1002649069012
+      - bot_token: ''
+        chat_id: ""
         parse_mode: Markdown
         send_resolved: true
 
   - name: 'email-admin'
     email_configs:
-      - to: 'laimis.milasius@gmail.com'
+      - to: ''
         send_resolved: true
 
 inhibit_rules:
