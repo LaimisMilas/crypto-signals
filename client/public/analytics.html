@@ -14,26 +14,19 @@
 
   <main class="container">
     <div class="ui-tabs" id="analytics-tabs" role="tablist">
-      <button role="tab" aria-controls="tab-equity" data-module="analyticsEquity" data-prefetch-url="/data/analytics-equity.json">Equity</button>
+      <button role="tab" aria-controls="tab-overview" data-module="analyticsOverview">Overview</button>
       <button role="tab" aria-controls="tab-trades" data-module="analyticsTrades" data-prefetch-url="/data/analytics-trades.json">Trades</button>
     </div>
 
-    <section id="tab-equity" role="tabpanel" tabindex="0">
-      <div id="equity-panel" class="panel-body"></div>
+    <section id="tab-overview" role="tabpanel" tabindex="0">
+      <div id="equity-card">
+        <span data-ts></span>
+        <span class="live-badge">LIVE</span>
+        <canvas data-equity-canvas></canvas>
+      </div>
     </section>
     <section id="tab-trades" role="tabpanel" tabindex="0" hidden>
       <div id="trades-panel" class="panel-body"></div>
-    </section>
-    <section id="jobs">
-      <h2>Job History</h2>
-      <form id="bt-form">
-        <input name="symbol" placeholder="symbol" />
-        <input name="from_ms" placeholder="from_ms" />
-        <input name="to_ms" placeholder="to_ms" />
-        <input name="strategy" placeholder="strategy" />
-        <button type="submit">Run Backtest</button>
-      </form>
-      <ul id="jobs-list"></ul>
     </section>
   </main>
 
@@ -43,80 +36,14 @@
     <script type="module" src="/assets/ui-tabs.js"></script>
     <script type="module" src="/assets/ui-lazy.js"></script>
     <script type="module" src="/assets/ui-loader.js"></script>
-    <script>
-      UILazy.register('analyticsEquity', async () => {
-        // čia galėtum įkelti papildomą skriptą jei reikia
-      });
-      UILazy.register('analyticsTrades', async () => {});
-
-      async function mountEquity() {
-        const container = document.getElementById('equity-panel');
-        await UILoader.withLoader(container, async () => {
-          const res = await fetch('/data/analytics-equity.json');
-          const data = await res.json();
-          container.textContent = `Equity points: ${data.length}`;
-        }, { type: 'rect', count: 3 });
+    <script src="/assets/vendor/chart.umd.js"></script>
+    <script type="module">
+      import { freezeCanvasEnv } from '/assets/chart-globals.js';
+      if (new URLSearchParams(location.search).get('e2e') === '1') {
+        (window as any).__E2E__ = true;
+        freezeCanvasEnv();
       }
-
-      async function mountTrades() {
-        const container = document.getElementById('trades-panel');
-        await UILoader.withLoader(container, async () => {
-          const res = await fetch('/data/analytics-trades.json');
-          const data = await res.json();
-          container.textContent = `Trades: ${data.length}`;
-        }, { type: 'table', rows: 6 });
-      }
-
-      async function loadJobs() {
-        const res = await fetch('/jobs');
-        const jobs = await res.json();
-        const ul = document.getElementById('jobs-list');
-        ul.innerHTML = '';
-        for (const j of jobs) {
-          const li = document.createElement('li');
-          li.textContent = `#${j.id} ${j.type} ${j.status}`;
-          if (j.status === 'succeeded') {
-            try {
-              const ar = await fetch(`/jobs/${j.id}/artifacts`);
-              const { artifacts } = await ar.json();
-              if (artifacts.length) {
-                const a = document.createElement('a');
-                a.href = artifacts[0].download;
-                a.textContent = 'equity.csv';
-                li.appendChild(document.createTextNode(' '));
-                li.appendChild(a);
-              }
-            } catch {}
-          }
-          ul.appendChild(li);
-        }
-      }
-
-      document.getElementById('bt-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const form = e.target;
-        const payload = {
-          symbol: form.symbol.value,
-          from_ms: Number(form.from_ms.value),
-          to_ms: Number(form.to_ms.value),
-          strategy: form.strategy.value
-        };
-        await fetch('/jobs/backtest', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        loadJobs();
-      });
-
-      setInterval(loadJobs, 5000);
-      loadJobs();
-
-      window.addEventListener('tabchange', (e) => {
-        const id = e.detail.id;
-        if (id === 'tab-equity') UILazy.mount('analyticsEquity', mountEquity);
-        if (id === 'tab-trades') UILazy.mount('analyticsTrades', mountTrades);
-      });
     </script>
+    <script type="module" src="/assets/analytics.js"></script>
   </body>
 </html>

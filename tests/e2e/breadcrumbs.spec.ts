@@ -6,5 +6,6 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.skip('breadcrumbs and title reflect active tab', async ({ page }) => {
+  await scanA11y(page, { impacts: ['critical', 'serious'] });
   // TODO: Breadcrumb injection pending.
 });
