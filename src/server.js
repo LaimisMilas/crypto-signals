@@ -684,9 +684,8 @@ export async function start() {
     import('./jobs/worker.js').then(m => m.startWorker());
   }
 }
+export default app;
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.env.NODE_ENV !== 'test') {
   start();
 }
-
-export default app;

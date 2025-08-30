@@ -2,16 +2,10 @@ import pg from 'pg';
 const { Pool } = pg;
 import { readFileSync } from 'fs';
 
-const conn = process.env.DATABASE_URL;
-const cfg = conn
-  ? { connectionString: conn }
-  : {
-      host: process.env.PGHOST || 'localhost',
-      port: +(process.env.PGPORT || 5432),
-      user: process.env.PGUSER,
-      password: process.env.PGPASSWORD,
-      database: process.env.PGDATABASE,
-    };
+const cfg = {
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : undefined,
+};
 
 const pool = new Pool(cfg);
 
@@ -24,7 +18,7 @@ async function pingOnce() {
     await pool.query('SELECT 1');
     ready = true;
     attempt = 0;
-    console.log('[db] connected', { host: cfg.host ?? 'url', db: cfg.database ?? 'url' });
+    console.log('[db] connected');
   } catch (e) {
     attempt += 1;
     const delay = Math.min(1000 * 2 ** Math.min(attempt, 4), MAX_DELAY_MS);
