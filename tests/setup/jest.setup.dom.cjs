@@ -1,4 +1,5 @@
 require('whatwg-fetch');
+require('jest-canvas-mock');
 
 if (!global.crypto) global.crypto = {};
 if (!global.crypto.randomUUID) {
@@ -7,6 +8,8 @@ if (!global.crypto.randomUUID) {
 
 class IO { observe(){} unobserve(){} disconnect(){} }
 if (!global.IntersectionObserver) global.IntersectionObserver = IO;
+class RO { observe(){} unobserve(){} disconnect(){} }
+if (!global.ResizeObserver) global.ResizeObserver = RO;
 
 if (typeof window !== 'undefined') {
   window.__DISABLE_AUTO_INIT__ = true;
