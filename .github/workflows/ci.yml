@@ -14,8 +14,15 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run test:cov
+      - run: npm run test:client
+      - run: npm run test:cov:client
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: coverage
+      - name: Upload client coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-client
+          path: coverage-client

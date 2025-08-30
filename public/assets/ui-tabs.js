@@ -1,153 +1,28 @@
-(function () {
-  const SEL_TABS = '.ui-tabs';
-  const HOV_DELAY = 80;
+export function initTabs(root = document, { storage = window.localStorage, loc = window.location, hash = loc.hash } = {}) {
+  const tablist = root.querySelector('[role="tablist"]');
+  if (!tablist) return;
+  const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
+  const panels = tabs.map(t => root.querySelector(`#${t.getAttribute('aria-controls')}`)).filter(Boolean);
 
-  // === UI v1.2.1 additions (guards) ===
-  const UITABS_CAN_HOVER_PREFETCH =
-    window.matchMedia?.('(hover: hover) and (pointer: fine)').matches &&
-    !(navigator.connection && navigator.connection.saveData);
-
-  function parseDesiredTab() {
-    const usp = new URLSearchParams(location.search);
-    const q = usp.get('tab');
-    if (q) return q;
-    const m = location.hash.match(/tab=([\w-]+)/i);
-    return m ? m[1] : null;
+  function select(id) {
+    tabs.forEach((t, i) => {
+      const selected = t.id === id;
+      t.setAttribute('aria-selected', selected ? 'true' : 'false');
+      t.tabIndex = selected ? 0 : -1;
+      if (panels[i]) panels[i].hidden = !selected;
+    });
+    if (loc && 'hash' in loc) loc.hash = `#${id}`;
+    if (storage) storage.setItem('ui-tabs:last', id);
   }
 
-  function setupTabs(root) {
-    const tabs = Array.from(root.querySelectorAll('[role="tab"]'));
-    const panels = tabs.map(t => document.getElementById(t.getAttribute('aria-controls')));
-    if (tabs.length === 0 || panels.length === 0) return;
+  const fromHash = (hash || '').replace('#', '');
+  const fromStorage = storage && storage.getItem('ui-tabs:last');
+  const defaultId = fromHash || fromStorage || (tabs[0] && tabs[0].id);
+  if (defaultId) select(defaultId);
 
-    const pageKey = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
-    const storageKey = `tabs:${pageKey}`;
+  tabs.forEach(t => t.addEventListener('click', () => select(t.id)));
+}
 
-    function activate(id, push = true) {
-      tabs.forEach(t => {
-        const is = t.getAttribute('aria-controls') === id;
-        t.setAttribute('aria-selected', String(is));
-        t.tabIndex = is ? 0 : -1;
-      });
-      panels.forEach(p => {
-        const is = p.id === id;
-        if (is) p.removeAttribute('hidden'); else p.setAttribute('hidden', '');
-      });
-      if (push) {
-        try {
-          const url = new URL(location.href);
-          url.searchParams.set('tab', id);
-          history.replaceState(null, '', url.toString());
-          localStorage.setItem(storageKey, id);
-        } catch {}
-      }
-      window.dispatchEvent(new CustomEvent('tabchange', { detail: { id } }));
-    }
-
-    tabs.forEach(t => {
-      t.addEventListener('click', () => activate(t.getAttribute('aria-controls')));
-      t.addEventListener('keydown', e => {
-        const i = tabs.indexOf(t);
-        if (e.key === 'ArrowRight') tabs[(i + 1) % tabs.length].focus();
-        if (e.key === 'ArrowLeft') tabs[(i - 1 + tabs.length) % tabs.length].focus();
-        if (e.key === 'Enter' || e.key === ' ') activate(t.getAttribute('aria-controls'));
-      });
-    });
-
-    const desired = parseDesiredTab() || localStorage.getItem(storageKey) || tabs[0].getAttribute('aria-controls');
-    activate(desired, false);
-  }
-
-  function enablePrefetch(root = document) {
-    const links = root.querySelectorAll(`${SEL_TABS} [role="tab"][data-module], ${SEL_TABS} a[data-module]`);
-    links.forEach((lnk) => {
-      let timer = null;
-      const doPrefetch = () => {
-        const moduleName = lnk.getAttribute('data-module');
-        const resource = lnk.getAttribute('data-prefetch-url') || null;
-        if (moduleName && window.UILazy && typeof window.UILazy.prefetch === 'function') {
-          window.UILazy.prefetch(moduleName, { resource });
-        }
-      };
-      const onEnter = () => {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(doPrefetch, HOV_DELAY);
-      };
-      const onLeave = () => {
-        if (timer) clearTimeout(timer);
-      };
-      if (UITABS_CAN_HOVER_PREFETCH) {
-        lnk.addEventListener('mouseenter', onEnter);
-        lnk.addEventListener('focus', onEnter);
-        lnk.addEventListener('mouseleave', onLeave);
-        lnk.addEventListener('blur', onLeave);
-      } else {
-        // Jei negalim hover prefetch, leidžiam tik focus prefetch (mažiau agresyvu)
-        // (pridėk nedidelį delay kaip ir hover atveju)
-        lnk.addEventListener('focus', () => {
-          setTimeout(() => {
-            const moduleName = lnk.getAttribute('data-module');
-            const resource = lnk.getAttribute('data-prefetch-url') || null;
-            window.UILazy?.prefetch?.(moduleName, { resource });
-          }, HOV_DELAY);
-        });
-      }
-    });
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll(SEL_TABS).forEach(setupTabs);
-    enablePrefetch();
-  });
-
-  // === UI v1.2.1 additions (idle + viewport prefetch) ===
-  document.addEventListener('DOMContentLoaded', () => {
-    const tabsRoot = document.querySelector('.ui-tabs');
-    if (!tabsRoot) return;
-
-    const doBatchPrefetch = () => {
-      const links = tabsRoot.querySelectorAll('[data-module]');
-      links.forEach((lnk) => {
-        const moduleName = lnk.getAttribute('data-module');
-        const resource = lnk.getAttribute('data-prefetch-url') || null;
-        requestIdleCallback
-          ? requestIdleCallback(() => window.UILazy?.prefetch?.(moduleName, { resource }), { timeout: 300 })
-          : setTimeout(() => window.UILazy?.prefetch?.(moduleName, { resource }), 200);
-      });
-    };
-
-    // Kai tab juosta pasirodo viewport'e — vienkartinis prefetch
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((e) => {
-        if (e.isIntersecting) {
-          doBatchPrefetch();
-          io.disconnect();
-        }
-      });
-    });
-    io.observe(tabsRoot);
-  });
-
-  // === UI v1.2.1 additions (Home/End keyboard support) ===
-  document.addEventListener('DOMContentLoaded', () => {
-    const root = document.querySelector('.ui-tabs');
-    if (!root) return;
-    root.addEventListener('keydown', (e) => {
-      if (e.key !== 'Home' && e.key !== 'End') return;
-      const tabs = Array.from(root.querySelectorAll('[role="tab"]'));
-      const i = tabs.indexOf(document.activeElement);
-      if (i < 0) return;
-      if (e.key === 'Home') { tabs[0]?.focus(); e.preventDefault(); }
-      if (e.key === 'End')  { tabs[tabs.length - 1]?.focus(); e.preventDefault(); }
-    });
-  });
-
-  // === UI v1.2.1 optional (tab panel scroll memory) ===
-  window.UITabsMemory = window.UITabsMemory || (() => {
-    const mem = new Map();
-    return {
-      onHide: (panelEl) => { if (panelEl) mem.set(panelEl.id, panelEl.scrollTop); },
-      onShow: (panelEl) => { if (panelEl) panelEl.scrollTop = mem.get(panelEl.id) || 0; }
-    };
-  })();
-})();
+if (typeof window !== 'undefined' && !window.__DISABLE_AUTO_INIT__) {
+  window.addEventListener('DOMContentLoaded', () => initTabs());
+}
