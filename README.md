@@ -105,5 +105,22 @@ Custom metrics exported:
   - Risk halted: `risk_state.state == 'HALTED'` for >15 min (metric or log-based)
   - Jobs backlog: `jobs.queue.oldest_age_ms` > 15 min
 
+## Analytics UI v2.0
+
+The analytics dashboard is a static page served from `client/public/analytics.html`.
+Start a lightweight dev server to view it locally:
+
+```
+npm run serve:client
+```
+
+Client-side tests cover the UI logic:
+
+- `npm run test:client` – run browser-like tests in JSDOM.
+- `npm run test:cov:client` – generate client coverage reports.
+
+The page expects backend endpoints `/analytics`, `/analytics/jobs`, `/analytics/job/:id/equity`, and `/portfolio`.
+During tests these requests are mocked via `whatwg-fetch`.
+
 ## Disclaimer
 Educational purposes only. No financial advice.
