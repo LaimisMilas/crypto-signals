@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Analytics</title>
+    <link rel="stylesheet" href="/assets/nav.css">
+    <link rel="stylesheet" href="/assets/ui-breadcrumbs.css">
+    <link rel="stylesheet" href="/assets/ui-tabs.css">
+    <link rel="stylesheet" href="/assets/ui-loader.css" />
+  </head>
+  <body>
+  <div id="app-nav"></div>
+  <div id="app-breadcrumbs"></div>
+
+  <main class="container">
+    <div class="ui-tabs" id="analytics-tabs" role="tablist">
+      <button role="tab" aria-controls="tab-equity" data-module="analyticsEquity" data-prefetch-url="/data/analytics-equity.json">Equity</button>
+      <button role="tab" aria-controls="tab-trades" data-module="analyticsTrades" data-prefetch-url="/data/analytics-trades.json">Trades</button>
+    </div>
+
+    <section id="tab-equity" role="tabpanel" tabindex="0">
+      <div id="equity-panel" class="panel-body"></div>
+    </section>
+    <section id="tab-trades" role="tabpanel" tabindex="0" hidden>
+      <div id="trades-panel" class="panel-body"></div>
+    </section>
+  </main>
+
+  <div id="app-footer"></div>
+    <script src="/assets/nav.js"></script>
+    <script src="/assets/ui-breadcrumbs.js"></script>
+    <script src="/assets/ui-tabs.js"></script>
+    <script src="/assets/ui-lazy.js"></script>
+    <script src="/assets/ui-loader.js"></script>
+    <script>
+      UILazy.register('analyticsEquity', async () => {
+        // čia galėtum įkelti papildomą skriptą jei reikia
+      });
+      UILazy.register('analyticsTrades', async () => {});
+
+      async function mountEquity() {
+        const container = document.getElementById('equity-panel');
+        await UILoader.withLoader(container, async () => {
+          const res = await fetch('/data/analytics-equity.json');
+          const data = await res.json();
+          container.textContent = `Equity points: ${data.length}`;
+        }, { type: 'rect', count: 3 });
+      }
+
+      async function mountTrades() {
+        const container = document.getElementById('trades-panel');
+        await UILoader.withLoader(container, async () => {
+          const res = await fetch('/data/analytics-trades.json');
+          const data = await res.json();
+          container.textContent = `Trades: ${data.length}`;
+        }, { type: 'table', rows: 6 });
+      }
+
+      window.addEventListener('tabchange', (e) => {
+        const id = e.detail.id;
+        if (id === 'tab-equity') UILazy.mount('analyticsEquity', mountEquity);
+        if (id === 'tab-trades') UILazy.mount('analyticsTrades', mountTrades);
+      });
+    </script>
+  </body>
+</html>

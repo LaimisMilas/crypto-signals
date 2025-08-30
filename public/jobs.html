@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Jobs</title>
+  <link rel="stylesheet" href="/assets/nav.css">
+  <link rel="stylesheet" href="/assets/ui-breadcrumbs.css">
+  <style>
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #333; padding: 4px 8px; }
+    #log { background:#000; color:#0f0; padding:8px; height:200px; overflow:auto; white-space:pre-wrap; }
+    .progress { background:#222; height:10px; margin-top:4px; }
+    .progress > div { background:#0a0; height:100%; width:0; }
+  </style>
+</head>
+<body>
+  <div id="app-nav"></div>
+  <div id="app-breadcrumbs"></div>
+
+  <section style="padding:16px;">
+    <h1>Jobs</h1>
+
+    <h2>New Job</h2>
+    <form id="job-form">
+      <label>Type
+        <select id="job-type">
+          <option value="backtest">backtest</option>
+          <option value="optimize">optimize</option>
+          <option value="walkforward">walkforward</option>
+        </select>
+      </label>
+      <label>Params JSON
+        <textarea id="job-params" rows="4" cols="40">{"symbol":"BTCUSDT"}</textarea>
+      </label>
+      <button type="submit">Create</button>
+    </form>
+
+    <h2>Jobs</h2>
+    <table id="jobs-table">
+      <thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Progress</th><th>Actions</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <div id="detail" style="margin-top:24px;display:none;">
+        <h2>Job Detail <span id="detail-id"></span> <span id="detail-trace"></span></h2>
+      <div class="progress"><div id="detail-progress"></div></div>
+      <pre id="log"></pre>
+      <ul id="artifacts"></ul>
+    </div>
+  </section>
+
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/ui-breadcrumbs.js"></script>
+    <script>
+      function BadgeTrace(meta){
+        if (!meta?.trace_id) return '';
+        const url = (window.OTEL_VIEWER_URL ? `${window.OTEL_VIEWER_URL}${meta.trace_id}` : null);
+        const t = meta.trace_id.slice(0,8);
+        return `<span class="badge">trace:${t}${url?` <a target="_blank" rel="noopener" href="${url}">open</a>`:''} <button data-copy="${meta.trace_id}">copy</button></span>`;
+      }
+
+      document.addEventListener('click', e => {
+        const btn = e.target.closest('button[data-copy]');
+        if (btn){
+          navigator.clipboard.writeText(btn.dataset.copy).then(()=>{
+            window.Toast?.open({ title:'Copied', variant:'success' });
+          });
+        }
+      });
+
+      async function fetchJobs(){
+        const res = await fetch('/jobs');
+        const jobs = await res.json();
+        const tbody = document.querySelector('#jobs-table tbody');
+        tbody.innerHTML = jobs.map(j=>`<tr id="job-${j.id}"><td>${j.id}</td><td>${j.type}</td><td>${j.status}</td><td>${Math.round((j.progress||0)*100)}%</td><td><button data-view="${j.id}">view</button> <button data-cancel="${j.id}">cancel</button></td></tr>`).join('');
+      }
+    fetchJobs();
+
+    document.getElementById('job-form').addEventListener('submit', async e=>{
+      e.preventDefault();
+      const type = document.getElementById('job-type').value;
+      let params;
+      try { params = JSON.parse(document.getElementById('job-params').value||'{}'); } catch { alert('Bad JSON'); return; }
+      await fetch('/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,params})});
+      document.getElementById('job-params').value='{}';
+      fetchJobs();
+    });
+
+    document.querySelector('#jobs-table').addEventListener('click', async e=>{
+      if(e.target.dataset.view){ showDetail(Number(e.target.dataset.view)); }
+      if(e.target.dataset.cancel){ await fetch(`/jobs/${e.target.dataset.cancel}/cancel`,{method:'POST'}); }
+    });
+
+    let es; // EventSource for detail
+    async function showDetail(id){
+      const res = await fetch(`/jobs/${id}`);
+      const data = await res.json();
+      document.getElementById('detail-id').textContent = id;
+      document.getElementById('log').textContent = data.logs.map(l=>`[${l.level}] ${l.msg}`).join('\n');
+      document.getElementById('artifacts').innerHTML = data.artifacts.map(a=>`<li><a href="/jobs/${id}/artifacts/${a.id}/download">${a.label||a.kind}</a></li>`).join('');
+      document.getElementById('detail').style.display='block';
+      updateProgress(id, data.job.progress||0);
+      if(es) es.close();
+        es = new EventSource(`/jobs/stream?id=${id}`);
+        es.addEventListener('job', ev=>{
+          const j = JSON.parse(ev.data);
+          updateProgress(id, j.progress||0);
+          fetchJobs();
+          if (j.meta) document.getElementById('detail-trace').innerHTML = BadgeTrace(j.meta);
+        });
+        es.addEventListener('log', ev=>{
+          const l = JSON.parse(ev.data);
+          const logEl = document.getElementById('log');
+          logEl.textContent += `\n[${l.level}] ${l.msg}`;
+          logEl.scrollTop = logEl.scrollHeight;
+          if (l.meta) document.getElementById('detail-trace').innerHTML = BadgeTrace(l.meta);
+        });
+    }
+
+    function updateProgress(id, p){
+      document.querySelector(`#job-${id} td:nth-child(4)`).textContent = Math.round(p*100)+"%";
+      document.getElementById('detail-progress').style.width = (p*100)+"%";
+    }
+
+    const esList = new EventSource('/jobs/stream');
+    esList.addEventListener('job', ev=>{
+      const j = JSON.parse(ev.data);
+      fetchJobs();
+      if(document.getElementById('detail').style.display !== 'none' && Number(document.getElementById('detail-id').textContent)===j.id){ updateProgress(j.id, j.progress||0); }
+    });
+  </script>
+</body>
+</html>
