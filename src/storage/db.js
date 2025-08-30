@@ -36,6 +36,14 @@ export function isDbReady() {
 }
 export const db = pool;
 
+export async function endPool() {
+  try {
+    await pool.end();
+  } catch {
+    // ignore errors during shutdown
+  }
+}
+
 // Subscribe to PostgreSQL LISTEN/NOTIFY channel
 // Returns a function that releases the listener
 export async function listen(channel, handler) {

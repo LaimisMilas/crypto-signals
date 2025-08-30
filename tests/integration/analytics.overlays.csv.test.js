@@ -12,7 +12,8 @@ await jest.unstable_mockModule('../../src/storage/db.js', () => ({
   db: mockDb,
   getDbPool: () => mockDb,
   isDbReady: () => true,
-  listen: async () => () => {}
+  listen: async () => () => {},
+  endPool: async () => {}
 }));
 
 const svc = await import('../../src/services/analyticsArtifacts.js');

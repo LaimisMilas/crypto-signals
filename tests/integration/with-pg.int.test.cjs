@@ -12,11 +12,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
-    const { pool } = await import('../../src/storage/db.js');
-    await pool.end();
+    if (typeof app.shutdown === 'function') await app.shutdown();
   } catch {}
   try {
-    await pgEnv?.container.stop();
+    await pgEnv.container.stop();
   } catch {}
 }, 60000);
 

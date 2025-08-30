@@ -11,7 +11,8 @@ await jest.unstable_mockModule('../../src/storage/db.js', () => ({
   db: mockDb,
   getDbPool: () => mockDb,
   isDbReady: () => true,
-  listen: async () => () => {}
+  listen: async () => () => {},
+  endPool: async () => {}
 }));
 
 const { db } = await import('../../src/storage/db.js');
