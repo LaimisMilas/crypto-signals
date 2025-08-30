@@ -16,6 +16,10 @@ window.UILazy = (function (api = window.UILazy || {}) {
     if (typeof mountFn === 'function') await mountFn();
   };
 
+  api.unmount = function (name) {
+    _modules.delete(name);
+  };
+
   api.prefetch = async function (name, opts = {}) {
     const m = _modules.get(name);
     if (m && !m.loaded) {
@@ -40,3 +44,6 @@ window.UILazy = (function (api = window.UILazy || {}) {
   api._cache = _cache;
   return api;
 })();
+
+export const mount = (name, mountFn) => window.UILazy.mount(name, mountFn);
+export const unmount = (name) => window.UILazy.unmount(name);
