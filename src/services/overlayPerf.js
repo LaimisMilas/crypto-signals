@@ -49,3 +49,34 @@ export function getCache(key){
 export function setCache(key, data){
   cache.set(key, { data, ts: Date.now() });
 }
+
+export function lttb(points, threshold){
+  const n = points.length;
+  if (threshold >= n || threshold <= 0) return points;
+  const sampled = [points[0]];
+  const every = (n - 2) / (threshold - 2);
+  let a = 0;
+  for (let i = 0; i < threshold - 2; i++) {
+    const start = Math.floor((i + 1) * every) + 1;
+    const end = Math.min(Math.floor((i + 2) * every) + 1, n);
+    let avgX = 0, avgY = 0;
+    const avgrange = end - start;
+    for (let j = start; j < end; j++) {
+      avgX += points[j].ts;
+      avgY += points[j].equity;
+    }
+    avgX /= avgrange || 1;
+    avgY /= avgrange || 1;
+    let maxArea = -1;
+    let nextA = start;
+    for (let j = start; j < end; j++) {
+      const area = Math.abs((points[a].ts - avgX) * (points[j].equity - points[a].equity) -
+                           (points[a].ts - points[j].ts) * (avgY - points[a].equity));
+      if (area > maxArea) { maxArea = area; nextA = j; }
+    }
+    sampled.push(points[nextA]);
+    a = nextA;
+  }
+  sampled.push(points[n-1]);
+  return sampled;
+}

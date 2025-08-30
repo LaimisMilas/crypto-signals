@@ -39,7 +39,9 @@ import analyticsReportRoutes from './routes/analytics.report.js';
 import analyticsReportHtmlRoutes from './routes/analytics.report.html.js';
 import analyticsReportShareHtmlRoutes from './routes/analytics.report.share.html.js';
 import artifactsRoutes from './routes/artifacts.js';
+import liveEquityRoutes from './routes/live.equity.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
+import { readSeries as readLiveEquity } from './services/liveEquity.js';
 import { debugObservRouter } from './routes/debug-observ.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -78,6 +80,7 @@ app.post('/webhook/stripe', bodyParser.raw({ type: 'application/json' }), stripe
 // JSON body for general APIs
 app.use(bodyParser.json());
 
+app.use('/', liveEquityRoutes);
 // Equity routes (SSE and fetch)
 equityRoutes(app);
 userStreamRoutes(app);
@@ -512,14 +515,19 @@ app.get('/analytics', async (req, res) => {
       }
     }
   }
-
   if (baselineOpt === 'live') {
-    baselineObj = { type: 'live', equity };
-    if (equity.length) {
-      const bret = equity.at(-1).equity / equity[0].equity - 1;
+    const allTs = (overlayEquities || []).flatMap(s => s.equity.map(p => p.ts)).sort((a,b)=>a-b);
+    const from = allTs.length ? allTs[0] : undefined;
+    const to = allTs.length ? allTs[allTs.length-1] : undefined;
+    const ds = (req.query.ds === 'lttb') ? 'lttb' : undefined;
+    const n = req.query.n;
+    const live = await readLiveEquity({ from, to, ds, n });
+    baselineObj = { type: 'live', equity: live.items };
+    if (baselineObj.equity.length) {
+      const bret = baselineObj.equity.at(-1).equity / baselineObj.equity[0].equity - 1;
       let bpk = -Infinity;
       let bdd = 0;
-      equity.forEach(p => {
+      baselineObj.equity.forEach(p => {
         bpk = Math.max(bpk, p.equity);
         bdd = Math.min(bdd, (p.equity / bpk - 1));
       });
