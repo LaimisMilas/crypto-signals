@@ -33,6 +33,30 @@ async function createMinimalSchema(client) {
     CREATE INDEX IF NOT EXISTS idx_job_artifacts_job ON job_artifacts(job_id);
   `);
 
+  // jobs table for job runner
+  await client.query(`
+    DO $$ BEGIN
+      CREATE TYPE job_type   AS ENUM ('backtest','optimize','walkforward');
+    EXCEPTION WHEN duplicate_object THEN null; END $$;
+    DO $$ BEGIN
+      CREATE TYPE job_status AS ENUM ('queued','running','succeeded','failed','canceled');
+    EXCEPTION WHEN duplicate_object THEN null; END $$;
+    CREATE TABLE IF NOT EXISTS jobs(
+      id BIGSERIAL PRIMARY KEY,
+      type       job_type   NOT NULL,
+      status     job_status NOT NULL DEFAULT 'queued',
+      priority   SMALLINT   NOT NULL DEFAULT 0,
+      params     JSONB      NOT NULL DEFAULT '{}',
+      progress   REAL       NOT NULL DEFAULT 0,
+      error      TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      started_at TIMESTAMPTZ,
+      finished_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at DESC);
+  `);
+
   // paper trades table for analytics/portfolio
   await client.query(`
     CREATE TABLE IF NOT EXISTS paper_trades(
