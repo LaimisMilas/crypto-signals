@@ -674,7 +674,7 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-async function start() {
+export async function start() {
   await startOtel();
   app.listen(PORT, () => {
     logger.info(`Server running on :${PORT}`);
@@ -685,4 +685,8 @@ async function start() {
   }
 }
 
-start();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  start();
+}
+
+export default app;
