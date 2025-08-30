@@ -1,0 +1,10 @@
+groups:
+- name: uptime
+  rules:
+  - alert: InstanceDown
+    expr: up == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Target {{ $labels.job }}/{{ $labels.instance }} is down"
