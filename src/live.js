@@ -14,6 +14,8 @@ const paramsPath = path.join(__dirname, '..', 'config', 'params.json');
 
 const LOOP_MS = 60 * 1000;
 let loopTimer = null;
+const timers = new Set();
+const isTest = process.env.NODE_ENV === 'test';
 
 const pool = getDbPool();
 if (!isDbReady()) {
@@ -271,7 +273,10 @@ export async function startLive() {
   } finally {
     client.release();
   }
-  if (!loopTimer) loopTimer = setInterval(step, LOOP_MS);
+  if (!loopTimer) {
+    loopTimer = setInterval(step, LOOP_MS);
+    timers.add(loopTimer);
+  }
 }
 
 export async function stopLive() {
@@ -281,8 +286,11 @@ export async function stopLive() {
   } finally {
     client.release();
   }
-  if (loopTimer) clearInterval(loopTimer);
-  loopTimer = null;
+  if (loopTimer) {
+    clearInterval(loopTimer);
+    timers.delete(loopTimer);
+    loopTimer = null;
+  }
 }
 
 export async function resetLive() {
@@ -298,8 +306,11 @@ export async function resetLive() {
   } finally {
     client.release();
   }
-  if (loopTimer) clearInterval(loopTimer);
-  loopTimer = null;
+  if (loopTimer) {
+    clearInterval(loopTimer);
+    timers.delete(loopTimer);
+    loopTimer = null;
+  }
   await ensurePublicDir();
   await fsp.writeFile(path.join(clientPublicDir, 'live-metrics.json'),
     JSON.stringify({ running: false, since: null, equity: 10000, pnl: 0, trades: [], openPositions: [], updatedAt: new Date().toISOString() }, null, 2)
@@ -326,19 +337,30 @@ export async function getLiveState() {
   }
 }
 
-// start loop if running after restart
-(async () => {
-  try {
-    const client = await pool.connect();
+function startBackground() {
+  if (isTest) return;
+  (async () => {
     try {
-      const state = await getState(client);
-      if (state.running && !loopTimer) {
-        loopTimer = setInterval(step, LOOP_MS);
+      const client = await pool.connect();
+      try {
+        const state = await getState(client);
+        if (state.running && !loopTimer) {
+          loopTimer = setInterval(step, LOOP_MS);
+          timers.add(loopTimer);
+        }
+      } finally {
+        client.release();
       }
-    } finally {
-      client.release();
+    } catch (e) {
+      console.error('[live] init query failed (non-fatal)', e.code || e.message);
     }
-  } catch (e) {
-    console.error('[live] init query failed (non-fatal)', e.code || e.message);
-  }
-})();
+  })();
+}
+
+export function stopBackground() {
+  for (const t of timers) clearInterval(t);
+  timers.clear();
+  loopTimer = null;
+}
+
+startBackground();

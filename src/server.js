@@ -6,10 +6,10 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import bodyParser from 'body-parser';
-import { db } from './storage/db.js';
+import { db, endPool } from './storage/db.js';
 import { createSingleUseInviteLink } from './notify/telegram.js';
 import { createCheckoutSession, stripeWebhook } from './payments/stripe.js';
-import { startLive, stopLive, resetLive, getLiveState, getLiveConfig, setLiveConfig } from './live.js';
+import { startLive, stopLive, resetLive, getLiveState, getLiveConfig, setLiveConfig, stopBackground } from './live.js';
 import { ingestOnce, getIngestHealth } from './ingest.js';
 import { equityRoutes } from './routes/equity.js';
 import { userStreamRoutes } from './routes/live.js';
@@ -672,6 +672,14 @@ app.use((req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+
+app.shutdown = async () => {
+  try {
+    if (typeof stopBackground === 'function') stopBackground();
+  } finally {
+    await endPool();
+  }
+};
 
 export async function start() {
   await startOtel();
