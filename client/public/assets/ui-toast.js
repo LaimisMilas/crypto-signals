@@ -19,5 +19,11 @@ export function showToast(message, { type = 'info', timeout = 3000, doc = docume
 }
 
 if (typeof window !== 'undefined' && !window.__DISABLE_AUTO_INIT__) {
-  window.addEventListener('DOMContentLoaded', () => initToast());
+  window.addEventListener('DOMContentLoaded', () => {
+    initToast();
+    if (window.__E2E__) {
+      if (typeof window.__showTestToast === 'function') window.__showTestToast();
+      else window.__showTestToast = (msg = 'Test Toast', opts) => showToast(msg, opts);
+    }
+  });
 }
