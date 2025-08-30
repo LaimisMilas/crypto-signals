@@ -4,6 +4,7 @@ import path from 'path';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from '../services/analyticsArtifacts.js';
 import { htmlPage } from '../services/reportHtml.js';
 import { eTagOfJSON, applyCacheHeaders, handleConditionalReq } from '../services/httpCache.js';
+import { readSeries as readLiveEquity } from '../services/liveEquity.js';
 
 async function loadSeries(jobIds){
   const out = [];
@@ -77,7 +78,13 @@ router.get('/analytics/overlays/report.html', async (req, res) => {
   let baseline = null;
   if (params.baseline === 'live'){
       try {
-        baseline = null; // TODO: integrate live baseline helper
+        const ds = params.ds === 'lttb' ? 'lttb' : undefined;
+        const n  = params.n;
+        const allTs = items.flatMap(s=>s.equity.map(p=>p.ts)).sort((a,b)=>a-b);
+        const from = allTs.length ? allTs[0] : undefined;
+        const to = allTs.length ? allTs[allTs.length-1] : undefined;
+        const live = await readLiveEquity({ from, to, ds, n });
+        baseline = { type:'live', equity: live.items };
       } catch (err) { /* ignore */ }
   }
 

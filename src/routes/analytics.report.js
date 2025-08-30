@@ -2,6 +2,7 @@ import express from 'express';
 import archiver from 'archiver';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from '../services/analyticsArtifacts.js';
 import { summarizeSeries, withBaselineDelta } from '../services/overlayStats.js';
+import { readSeries as readLiveEquity } from '../services/liveEquity.js';
 
 const router = express.Router();
 
@@ -36,7 +37,13 @@ router.get('/analytics/overlays/report', async (req, res) => {
   let baselineObj = null;
   if (baseline === 'live'){
     try {
-      baselineObj = null;
+      const allTs = series.flatMap(s=>s.equity.map(p=>p.ts)).sort((a,b)=>a-b);
+      const from = allTs.length ? allTs[0] : undefined;
+      const to = allTs.length ? allTs[allTs.length-1] : undefined;
+      const ds = req.query.ds === 'lttb' ? 'lttb' : undefined;
+      const n = req.query.n;
+      const live = await readLiveEquity({ from, to, ds, n });
+      baselineObj = { type:'live', equity: live.items };
     } catch {}
   }
 
