@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  retries: process.env.CI ? 1 : 0,
   use: {
     baseURL: 'http://localhost:4173',
     headless: true,
@@ -10,6 +11,9 @@ export default defineConfig({
     locale: 'en-US',
     colorScheme: 'dark',
     timezoneId: 'UTC',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    video: 'off',
   },
   expect: {
     toHaveScreenshot: { maxDiffPixelRatio: 0.01, threshold: 0.5 },

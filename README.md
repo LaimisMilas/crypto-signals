@@ -1,3 +1,5 @@
+![Client Tests](https://github.com/your-org/crypto-signals/actions/workflows/client-tests.yml/badge.svg) ![Client Coverage](https://img.shields.io/badge/coverage--client-unknown-lightgrey)
+
 # Crypto Signals MVP (Stripe + React + Docker)
 
 Production-ready MVP for a crypto trading signals service.
