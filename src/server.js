@@ -708,7 +708,13 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
+let _server = null;
+
 app.shutdown = async () => {
+  if (_server) {
+    await new Promise(res => _server.close(res));
+    _server = null;
+  }
   try {
     jobRunner.stop();
     if (typeof stopBackground === 'function') stopBackground();
@@ -718,17 +724,21 @@ app.shutdown = async () => {
 };
 
 export async function start() {
+  if (process.env.NODE_ENV === 'test' || process.env.APP_DISABLE_LISTEN === '1') {
+    return null;
+  }
   await startOtel();
-  app.listen(PORT, () => {
+  _server = app.listen(PORT, () => {
     logger.info(`Server running on :${PORT}`);
   });
 
   if (process.env.ENABLE_JOB_WORKER === 'true') {
     import('./jobs/worker.js').then(m => m.startWorker());
   }
+  return _server;
 }
 export default app;
 
-if (process.env.NODE_ENV !== 'test') {
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   start();
 }
