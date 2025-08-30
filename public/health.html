@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="lt">
+<head>
+  <meta charset="utf-8" />
+  <title>Health</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; color: #111; background:#fafafa; }
+    .card { border:1px solid #e5e7eb; border-radius:12px; padding:16px; background:#fff; max-width:720px; }
+    .row { display:flex; align-items:center; gap:8px; }
+    .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+    .ok { background:#10b981; }
+    .bad { background:#ef4444; }
+    table { border-collapse: collapse; width:100%; margin-top:12px; }
+    th, td { border-bottom:1px solid #eee; padding:8px; text-align:left; }
+    th { color:#374151; }
+    code { background:#f3f4f6; padding:2px 4px; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <h1>Service Health</h1>
+  <div class="card">
+    <div id="status" class="row"><span class="dot"></span><strong>Loading…</strong></div>
+    <div id="meta" style="margin-top:8px;" class="muted"></div>
+
+    <table id="env">
+      <thead><tr><th>Env</th><th>Present</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <table id="sys">
+      <thead><tr><th>Key</th><th>Value</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <div style="margin-top:8px;">
+      Parsisiųsti CSV/JSON:
+      <a href="/download/backtest.csv">backtest.csv</a> ·
+      <a href="/download/optimize.csv">optimize.csv</a> ·
+      <a href="/download/walkforward-agg.csv">walkforward-agg.csv</a> ·
+      <a href="/download/walkforward-summary.json">walkforward-summary.json</a> ·
+      <a href="/download/metrics.json">metrics.json</a>
+    </div>
+  </div>
+
+  <script>
+    async function init() {
+      const h = await fetch('/health').then(r=>r.json()).catch(()=>null);
+      const v = await fetch('/version').then(r=>r.json()).catch(()=>null);
+
+      const status = document.getElementById('status');
+      const dot = status.querySelector('.dot');
+      const text = status.querySelector('strong');
+
+      if (!h) {
+        dot.className = 'dot bad';
+        text.textContent = 'offline';
+        return;
+      }
+      const ok = h.status === 'ok';
+      dot.className = 'dot ' + (ok ? 'ok' : 'bad');
+      text.textContent = ok ? 'ok' : 'degraded';
+
+      const meta = document.getElementById('meta');
+      const built = v?.builtAt || 'n/a';
+      const git = v?.git || 'n/a';
+      meta.innerHTML = `Uptime: <code>${h.uptimeSec}s</code> · Built: <code>${built}</code> · Git: <code>${git}</code>`;
+
+      const envT = document.querySelector('#env tbody');
+      envT.innerHTML = '';
+      for (const [k, present] of Object.entries(h.env || {})) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><code>${k}</code></td><td>${present ? '✅' : '❌'}</td>`;
+        envT.appendChild(tr);
+      }
+
+      const sysT = document.querySelector('#sys tbody');
+      sysT.innerHTML = '';
+      sysT.appendChild(row('DB', h.db?.ok ? '✅' : '❌'));
+      sysT.appendChild(row('RSS (MB)', h.memoryMB?.rss ?? 'n/a'));
+      sysT.appendChild(row('HeapUsed (MB)', h.memoryMB?.heapUsed ?? 'n/a'));
+      sysT.appendChild(row('Service', v?.name ? `${v.name} ${v.version}` : 'n/a'));
+
+      function row(a, b) { const tr = document.createElement('tr'); tr.innerHTML = `<td>${a}</td><td>${b}</td>`; return tr; }
+    }
+    init();
+  </script>
+</body>
+</html>

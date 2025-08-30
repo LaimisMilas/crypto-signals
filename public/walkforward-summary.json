@@ -1,0 +1,12 @@
+{
+  "folds": 2,
+  "trades": 32,
+  "closedTrades": 16,
+  "pnl": -7706.42,
+  "winRate": 25,
+  "maxDrawdown": 3565.98,
+  "bestParamsCount": {
+    "rsiBuy=30;rsiSell=65;atrMult=2;adxMin=18": 1,
+    "rsiBuy=25;rsiSell=65;atrMult=2.5;adxMin=12": 1
+  }
+}

@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Portfolio</title>
+  <link rel="stylesheet" href="/assets/nav.css">
+  <link rel="stylesheet" href="/assets/ui-breadcrumbs.css">
+  <link rel="stylesheet" href="/assets/ui-tabs.css">
+</head>
+<body>
+  <div id="app-nav"></div>
+  <div id="app-breadcrumbs"></div>
+
+  <main class="container">
+    <div class="tabs" data-tabs id="portfolio-tabs">
+      <div class="tablist" role="tablist" aria-label="Portfolio sections">
+        <button role="tab" id="tab-alloc" data-tab="alloc" aria-selected="true">Allocation</button>
+        <button role="tab" id="tab-risk" data-tab="risk">Risk</button>
+        <button role="tab" id="tab-corr" data-tab="corr">Correlation</button>
+        <button role="tab" id="tab-attr" data-tab="attr">Attribution</button>
+      </div>
+
+      <section role="tabpanel" id="panel-alloc" data-tab-panel="alloc" aria-labelledby="tab-alloc"
+        data-lazy-module="/assets/modules/portfolio/allocation.js"
+        data-lazy-vendor="/assets/vendor/chart.umd.js"></section>
+
+      <section role="tabpanel" id="panel-risk" data-tab-panel="risk" aria-labelledby="tab-risk"
+        data-lazy-module="/assets/modules/portfolio/risk.js"
+        data-lazy-vendor="/assets/vendor/chart.umd.js" hidden></section>
+
+      <section role="tabpanel" id="panel-corr" data-tab-panel="corr" aria-labelledby="tab-corr"
+        data-lazy-module="/assets/modules/portfolio/correlation.js" hidden></section>
+
+      <section role="tabpanel" id="panel-attr" data-tab-panel="attr" aria-labelledby="tab-attr"
+        data-lazy-module="/assets/modules/portfolio/attribution.js"
+        data-lazy-vendor="/assets/vendor/chart.umd.js" hidden></section>
+    </div>
+  </main>
+
+  <div id="app-footer"></div>
+  <script src="/assets/nav.js"></script>
+  <script src="/assets/ui-breadcrumbs.js"></script>
+  <script src="/assets/ui-tabs.js"></script>
+  <script src="/assets/ui-lazy.js"></script>
+</body>
+</html>
