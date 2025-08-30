@@ -3,6 +3,7 @@ import path from 'path';
 import { LRUCache } from 'lru-cache';
 import crypto from 'crypto';
 import { ARTIFACTS_ROOT } from '../config.js';
+import { db } from '../storage/db.js';
 
 const metaCache = new LRUCache({ max: 500, ttl: 10 * 60 * 1000 });
 
@@ -53,5 +54,20 @@ export function parseRange(rangeHeader, size) {
   if (Number.isNaN(end) || end >= size) end = size - 1;
   if (start > end) return null;
   return { start, end, length: end - start + 1 };
+}
+
+export async function writeJobArtifact({ jobId, kind, label, absPath, filename }) {
+  const dir = path.join(ARTIFACTS_ROOT, `job${jobId}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const dest = path.join(dir, filename);
+  fs.copyFileSync(absPath, dest);
+  const st = fs.statSync(dest);
+  const rel = path.relative(ARTIFACTS_ROOT, dest);
+  await db.query(
+    `INSERT INTO job_artifacts(job_id, kind, label, path, size_bytes, remote_url)
+     VALUES($1,$2,$3,$4,$5,null)`,
+    [jobId, kind, label, rel, st.size]
+  );
+  return { path: rel, size: st.size };
 }
 

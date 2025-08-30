@@ -17,7 +17,6 @@ import { portfolioRoutes } from './routes/portfolio.js';
 import { riskRoutes } from './routes/risk.js';
 import { getStrategies } from './strategies/index.js';
 import { configRoutes } from './routes/config.js';
-import { jobsRoutes } from './routes/jobs.js';
 import binanceRoutes from './integrations/binance/routes.js';
 import { healthRoutes } from './routes/health.js';
 import analyticsJobsRoutes from './routes/analytics.jobs.js';
@@ -43,6 +42,7 @@ import liveEquityRoutes from './routes/live.equity.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from './services/analyticsArtifacts.js';
 import { readSeries as readLiveEquity } from './services/liveEquity.js';
 import { debugObservRouter } from './routes/debug-observ.js';
+import * as jobRunner from './jobRunner.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'client', 'public');
@@ -87,7 +87,42 @@ userStreamRoutes(app);
 portfolioRoutes(app);
 riskRoutes(app);
 configRoutes(app);
-jobsRoutes(app);
+jobRunner.start();
+
+app.post('/jobs/backtest', async (req, res) => {
+  const params = req.body || {};
+  const { rows } = await db.query(
+    `INSERT INTO jobs(type, status, priority, params)
+     VALUES('backtest','queued',$1,$2)
+     RETURNING *`,
+    [Number(params.priority ?? 0), params]
+  );
+  res.status(201).json(rows[0]);
+});
+
+app.get('/jobs', async (_req, res) => {
+  const { rows } = await db.query(
+    `SELECT id, type, status, progress, created_at, started_at, finished_at
+     FROM jobs ORDER BY created_at DESC LIMIT 50`
+  );
+  res.json(rows);
+});
+
+app.get('/jobs/:id', async (req, res) => {
+  const { rows } = await db.query('SELECT * FROM jobs WHERE id=$1', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ error: 'not_found' });
+  res.json(rows[0]);
+});
+
+app.post('/jobs/:id/cancel', async (req, res) => {
+  jobRunner.requestCancel(req.params.id);
+  await db.query(
+    `UPDATE jobs SET status='canceled', finished_at=now() WHERE id=$1 AND status IN ('queued')`,
+    [req.params.id]
+  );
+  res.json({ ok: true });
+});
+
 app.use(artifactsRoutes);
 app.use('/binance', binanceRoutes);
 healthRoutes(app);
@@ -675,6 +710,7 @@ const PORT = process.env.PORT || 3000;
 
 app.shutdown = async () => {
   try {
+    jobRunner.stop();
     if (typeof stopBackground === 'function') stopBackground();
   } finally {
     await endPool();
