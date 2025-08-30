@@ -3,6 +3,9 @@ export function initTabs(root = document, { storage = window.localStorage, loc =
   if (!tablist) return;
   const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
   const panels = tabs.map(t => root.querySelector(`#${t.getAttribute('aria-controls')}`)).filter(Boolean);
+  tabs.forEach(t => {
+    if (!t.id) t.id = t.getAttribute('aria-controls') || '';
+  });
 
   function select(id) {
     tabs.forEach((t, i) => {
