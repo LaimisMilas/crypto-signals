@@ -1,37 +1,195 @@
-import { E2E_EQUITY } from './analytics.e2e-dataset.js';
+import { showToast } from './ui-toast.js';
 
-function getDataset() {
-  if (window.__E2E__) return Promise.resolve(E2E_EQUITY);
-  return fetch('/data/analytics-equity.json').then(r => r.json());
+const ChartLib = globalThis.Chart;
+if (ChartLib?.register && ChartLib.registerables) {
+  ChartLib.register(...ChartLib.registerables);
 }
 
-async function renderChart() {
-  const canvas = document.querySelector('[data-equity-canvas]');
-  if (!canvas || !(window as any).Chart) return;
-  const points = await getDataset();
-  const labels = points.map(p => new Date(p.ts));
-  const data = points.map(p => p.equity);
-  const cfg = {
+const state = {
+  chart: null,
+  overlays: new Map(),
+  filters: {
+    symbol: 'SOLUSDT',
+    interval: '1m',
+    from_ms: '',
+    to_ms: '',
+    ds: 'lttb',
+    n: 1000,
+  },
+};
+
+export function composeAnalyticsQuery(p) {
+  const q = new URLSearchParams();
+  if (p.symbol) q.set('symbol', p.symbol);
+  if (p.interval) q.set('interval', p.interval);
+  if (p.from_ms) q.set('from_ms', p.from_ms);
+  if (p.to_ms) q.set('to_ms', p.to_ms);
+  if (p.ds) q.set('ds', p.ds);
+  if (p.n !== undefined) q.set('n', p.n);
+  return q.toString();
+}
+
+export function normalizeEquity(list) {
+  const res = list.map(p => ({ x: Number(p.ts ?? p.ms), y: Number(p.equity) }));
+  res.sort((a, b) => a.x - b.x);
+  return res;
+}
+
+export function overlayLabel(job) {
+  return `${job.id}:${job.strategy || ''}`;
+}
+
+export function composeCsvUrl(ids, range) {
+  const q = new URLSearchParams();
+  q.set('ids', ids.join(','));
+  if (range?.from_ms) q.set('from_ms', range.from_ms);
+  if (range?.to_ms) q.set('to_ms', range.to_ms);
+  return `/analytics/overlays.csv?${q.toString()}`;
+}
+
+export function initEquityChart(ctx) {
+  return new ChartLib(ctx, {
     type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Equity',
-        data,
-        borderWidth: window.__E2E__ ? 1 : 3,
-        pointRadius: window.__E2E__ ? 0 : undefined,
-        tension: window.__E2E__ ? 0 : 0.4,
-      }],
-    },
+    data: { datasets: [] },
     options: {
-      animation: window.__E2E__ ? false : undefined,
+      parsing: false,
+      animation: false,
+      scales: {
+        x: { type: 'linear' },
+      },
     },
-  };
-  new Chart(canvas.getContext('2d'), cfg);
+  });
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', renderChart);
-} else {
-  renderChart();
+export function setBaseline(series) {
+  const ds = {
+    id: 'baseline',
+    label: 'Baseline',
+    data: series,
+    borderColor: 'blue',
+    fill: false,
+  };
+  const i = state.chart.data.datasets.findIndex(d => d.id === 'baseline');
+  if (i >= 0) state.chart.data.datasets[i] = ds; else state.chart.data.datasets.push(ds);
+  state.chart.update();
+}
+
+export function upsertOverlay(id, series, label) {
+  state.overlays.set(String(id), series);
+  const ds = { id: `overlay-${id}`, label, data: series, fill: false };
+  const i = state.chart.data.datasets.findIndex(d => d.id === `overlay-${id}`);
+  if (i >= 0) state.chart.data.datasets[i] = ds; else state.chart.data.datasets.push(ds);
+  state.chart.update();
+}
+
+export function removeOverlay(id) {
+  state.overlays.delete(String(id));
+  state.chart.data.datasets = state.chart.data.datasets.filter(d => d.id !== `overlay-${id}`);
+  state.chart.update();
+}
+
+export function getChart() { return state.chart; }
+
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP');
+  return r.json();
+}
+
+export async function fetchBaseline(doc = document) {
+  try {
+    const qs = composeAnalyticsQuery(state.filters);
+    const data = await fetchJSON(`/analytics?baseline=live&${qs}`);
+    const series = normalizeEquity(data);
+    setBaseline(series);
+  } catch {
+    showToast('Failed to load baseline', { type: 'error', doc });
+  }
+}
+
+export async function fetchOverlay(id, label, doc = document) {
+  try {
+    const data = await fetchJSON(`/analytics/job/${id}/equity`);
+    upsertOverlay(id, normalizeEquity(data), label);
+    updateCsvLink(doc);
+  } catch {
+    showToast('Failed to load overlay', { type: 'error', doc });
+  }
+}
+
+export async function fetchJobs(doc = document) {
+  try {
+    const data = await fetchJSON('/analytics/jobs?limit=20');
+    renderJobsTable(data.jobs || data, doc);
+    renderOverlayList(data.jobs || data, doc);
+  } catch {
+    showToast('Failed to load jobs', { type: 'error', doc });
+  }
+}
+
+function renderOverlayList(list, doc) {
+  const host = doc.querySelector('[data-overlays-list]');
+  if (!host) return;
+  host.innerHTML = '';
+  list.forEach(job => {
+    const wrap = doc.createElement('div');
+    const cb = doc.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.jobId = job.id;
+    cb.addEventListener('change', e => {
+      if (cb.checked) fetchOverlay(job.id, overlayLabel(job), doc);
+      else { removeOverlay(job.id); updateCsvLink(doc); }
+    });
+    wrap.appendChild(cb);
+    const label = doc.createElement('span');
+    label.textContent = overlayLabel(job);
+    wrap.appendChild(label);
+    host.appendChild(wrap);
+  });
+}
+
+function renderJobsTable(list, doc) {
+  const tbody = doc.querySelector('[data-jobs-table] tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  list.forEach(job => {
+    const tr = doc.createElement('tr');
+    tr.innerHTML = `<td>${job.id}</td><td>${job.type || ''}</td><td>${job.symbol || ''}</td><td>${job.strategy || ''}</td><td>${job.status || ''}</td><td>${(job.artifacts||[]).map(a=>`<a href="${a.url}">${a.name||'dl'}</a>`).join(', ')}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+export function updateCsvLink(doc = document) {
+  const link = doc.querySelector('[data-export-csv]');
+  if (!link) return;
+  const ids = Array.from(state.overlays.keys());
+  if (ids.length === 0) { link.href = '#'; return; }
+  link.href = composeCsvUrl(ids, { from_ms: state.filters.from_ms, to_ms: state.filters.to_ms });
+}
+
+export function init(doc = document) {
+  const canvas = doc.querySelector('[data-equity]');
+  if (!canvas) return;
+  state.chart = initEquityChart(canvas.getContext('2d'));
+  fetchBaseline(doc);
+  fetchJobs(doc);
+  const refreshBtn = doc.querySelector('[data-jobs-refresh]');
+  if (refreshBtn) refreshBtn.addEventListener('click', () => fetchJobs(doc));
+  const applyBtn = doc.querySelector('[data-apply]');
+  if (applyBtn) applyBtn.addEventListener('click', () => fetchBaseline(doc));
+  const resetBtn = doc.querySelector('[data-reset]');
+  if (resetBtn) resetBtn.addEventListener('click', () => {
+    doc.querySelector('[name=symbol]').value = 'SOLUSDT';
+    doc.querySelector('[name=interval]').value = '1m';
+    doc.querySelector('[name=from]').value = '';
+    doc.querySelector('[name=to]').value = '';
+    doc.querySelector('[name=ds]').value = 'lttb';
+    doc.querySelector('[name=n]').value = '1000';
+    state.filters = { symbol:'SOLUSDT', interval:'1m', from_ms:'', to_ms:'', ds:'lttb', n:1000 };
+    fetchBaseline(doc);
+  });
+}
+
+if (typeof window !== 'undefined' && !window.__DISABLE_AUTO_INIT__) {
+  window.addEventListener('DOMContentLoaded', () => init());
 }

@@ -1,49 +1,74 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <title>Analytics</title>
-    <link rel="stylesheet" href="/assets/nav.css">
-    <link rel="stylesheet" href="/assets/ui-breadcrumbs.css">
-    <link rel="stylesheet" href="/assets/ui-tabs.css">
-    <link rel="stylesheet" href="/assets/ui-loader.css" />
-  </head>
-  <body data-page="Analytics">
-  <div id="app-nav"></div>
-  <div id="app-breadcrumbs"></div>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Analytics</title>
+  <link rel="stylesheet" href="/assets/nav.css">
+  <link rel="stylesheet" href="/assets/ui-breadcrumbs.css">
+  <link rel="stylesheet" href="/assets/ui-loader.css">
+  <link rel="stylesheet" href="/assets/analytics.css">
+</head>
+<body data-page="Analytics">
+<div id="app-nav"></div>
+<div id="app-breadcrumbs"></div>
+<div id="toasts"></div>
+<main class="container">
+  <fieldset class="filters">
+    <label>Symbol <input name="symbol" list="symbols" value="SOLUSDT"></label>
+    <datalist id="symbols"><option value="SOLUSDT"></option></datalist>
+    <label>Interval
+      <select name="interval">
+        <option value="1m" selected>1m</option>
+        <option value="5m">5m</option>
+        <option value="15m">15m</option>
+        <option value="1h">1h</option>
+        <option value="4h">4h</option>
+        <option value="1d">1d</option>
+      </select>
+    </label>
+    <label>From <input name="from" placeholder="ms or ISO"></label>
+    <label>To <input name="to" placeholder="ms or ISO"></label>
+    <label>Downsampling
+      <select name="ds">
+        <option value="none">none</option>
+        <option value="lttb" selected>lttb</option>
+      </select>
+    </label>
+    <label>N <input name="n" type="number" value="1000"></label>
+    <button type="button" data-apply>Apply</button>
+    <button type="button" data-reset>Reset</button>
+  </fieldset>
 
-  <main class="container">
-    <div class="ui-tabs" id="analytics-tabs" role="tablist">
-      <button role="tab" aria-controls="tab-overview" data-module="analyticsOverview">Overview</button>
-      <button role="tab" aria-controls="tab-trades" data-module="analyticsTrades" data-prefetch-url="/data/analytics-trades.json">Trades</button>
-    </div>
+  <section class="card" id="equity-card">
+    <h2>Equity (Baseline + Overlays)</h2>
+    <canvas data-equity></canvas>
+  </section>
 
-    <section id="tab-overview" role="tabpanel" tabindex="0">
-      <div id="equity-card">
-        <span data-ts></span>
-        <span class="live-badge">LIVE</span>
-        <canvas data-equity-canvas></canvas>
-      </div>
-    </section>
-    <section id="tab-trades" role="tabpanel" tabindex="0" hidden>
-      <div id="trades-panel" class="panel-body"></div>
-    </section>
-  </main>
+  <section class="card" id="overlays-card">
+    <h2>Overlays</h2>
+    <div class="overlays-list" data-overlays-list></div>
+    <a data-export-csv href="#">Export Overlays CSV</a>
+  </section>
 
-  <div id="app-footer"></div>
-    <script type="module" src="/assets/nav.js"></script>
-    <script type="module" src="/assets/ui-breadcrumbs.js"></script>
-    <script type="module" src="/assets/ui-tabs.js"></script>
-    <script type="module" src="/assets/ui-lazy.js"></script>
-    <script type="module" src="/assets/ui-loader.js"></script>
-    <script src="/assets/vendor/chart.umd.js"></script>
-    <script type="module">
-      import { freezeCanvasEnv } from '/assets/chart-globals.js';
-      if (new URLSearchParams(location.search).get('e2e') === '1') {
-        (window as any).__E2E__ = true;
-        freezeCanvasEnv();
-      }
-    </script>
-    <script type="module" src="/assets/analytics.js"></script>
-  </body>
+  <section class="card" id="jobs-card">
+    <h2>Jobs</h2>
+    <button type="button" data-jobs-refresh>Refresh</button>
+    <table data-jobs-table>
+      <thead><tr><th>id</th><th>type</th><th>symbol</th><th>strategy</th><th>status</th><th>artifacts</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="card" id="stats-card">
+    <h2>Stats/Portfolio</h2>
+    <div data-portfolio></div>
+  </section>
+</main>
+<div id="app-footer"></div>
+<script type="module" src="/assets/nav.js"></script>
+<script type="module" src="/assets/ui-breadcrumbs.js"></script>
+<script type="module" src="/assets/ui-toast.js"></script>
+<script src="/assets/vendor/chart.umd.js"></script>
+<script type="module" src="/assets/analytics.js"></script>
+</body>
 </html>
