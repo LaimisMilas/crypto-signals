@@ -5,6 +5,7 @@ import { db } from '../storage/db.js';
 import { htmlPage } from '../services/reportHtml.js';
 import { listArtifacts, readArtifactCSV, normalizeEquity } from '../services/analyticsArtifacts.js';
 import { eTagOfJSON, applyCacheHeaders, handleConditionalReq } from '../services/httpCache.js';
+import { readSeries as readLiveEquity } from '../services/liveEquity.js';
 
 async function loadSeries(jobIds){
   const out = [];
@@ -71,8 +72,20 @@ router.get('/analytics/overlays/share/:token/report.html', async (req,res)=>{
       }
     } catch (err) { /* ignore */ }
   }
+  let baseline = null;
+  if (params.baseline === 'live'){
+    try {
+      const ds = params.ds === 'lttb' ? 'lttb' : undefined;
+      const n  = params.n;
+      const allTs = items.flatMap(s=>s.equity.map(p=>p.ts)).sort((a,b)=>a-b);
+      const from = allTs.length ? allTs[0] : undefined;
+      const to = allTs.length ? allTs[allTs.length-1] : undefined;
+      const live = await readLiveEquity({ from, to, ds, n });
+      baseline = { type:'live', equity: live.items };
+    } catch (err) { /* ignore */ }
+  }
 
-  const body = { jobIds: ids, items, inline, artifactsByJobId, baseline: null, params, inlineReq: payload.inline || null };
+  const body = { jobIds: ids, items, inline, artifactsByJobId, baseline, params, inlineReq: payload.inline || null };
   const etag = eTagOfJSON({ token: req.params.token, count: items.length, inline: inline?.length||0, p: params });
   const now = Date.now();
   if (handleConditionalReq(req, res, etag, now)) {
