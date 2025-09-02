@@ -18,6 +18,25 @@ const state = {
   },
 };
 
+export function persistFilters(store = localStorage) {
+  try { store.setItem('analyticsFilters', JSON.stringify(state.filters)); } catch {}
+}
+
+export function loadFilters(doc = document, store = localStorage) {
+  try {
+    const raw = store.getItem('analyticsFilters');
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    Object.assign(state.filters, data);
+    doc.querySelector('[name=symbol]').value = state.filters.symbol || '';
+    doc.querySelector('[name=interval]').value = state.filters.interval || '';
+    doc.querySelector('[name=from]').value = state.filters.from_ms || '';
+    doc.querySelector('[name=to]').value = state.filters.to_ms || '';
+    doc.querySelector('[name=ds]').value = state.filters.ds || '';
+    doc.querySelector('[name=n]').value = String(state.filters.n ?? '');
+  } catch {}
+}
+
 export function composeAnalyticsQuery(p) {
   const q = new URLSearchParams();
   if (p.symbol) q.set('symbol', p.symbol);
@@ -39,11 +58,12 @@ export function overlayLabel(job) {
   return `${job.id}:${job.strategy || ''}`;
 }
 
-export function composeCsvUrl(ids, range) {
+export function composeCsvUrl(ids = [], range = {}) {
+  if (!ids.length) return '#';
   const q = new URLSearchParams();
   q.set('ids', ids.join(','));
-  if (range?.from_ms) q.set('from_ms', range.from_ms);
-  if (range?.to_ms) q.set('to_ms', range.to_ms);
+  if (range.from_ms) q.set('from_ms', range.from_ms);
+  if (range.to_ms) q.set('to_ms', range.to_ms);
   return `/analytics/overlays.csv?${q.toString()}`;
 }
 
@@ -56,6 +76,15 @@ export function initEquityChart(ctx) {
       animation: false,
       scales: {
         x: { type: 'linear' },
+      },
+      plugins: {
+        legend: {
+          onClick(_e, item, legend) {
+            const ds = legend.chart.data.datasets[item.datasetIndex];
+            ds.hidden = !ds.hidden;
+            legend.chart.update();
+          },
+        },
       },
     },
   });
@@ -92,18 +121,20 @@ export function getChart() { return state.chart; }
 
 async function fetchJSON(url) {
   const r = await fetch(url);
-  if (!r.ok) throw new Error('HTTP');
+  if (!r.ok) throw new Error(`${url} [${r.status}]`);
   return r.json();
 }
 
 export async function fetchBaseline(doc = document) {
   try {
     const qs = composeAnalyticsQuery(state.filters);
-    const data = await fetchJSON(`/analytics?baseline=live&${qs}`);
+    const url = `/analytics?baseline=live&${qs}`;
+    const data = await fetchJSON(url);
     const series = normalizeEquity(data);
     setBaseline(series);
-  } catch {
-    showToast('Failed to load baseline', { type: 'error', doc });
+    updateCsvLink(doc);
+  } catch (e) {
+    showToast(`Failed to load baseline ${e.message || ''}`.trim(), { type: 'error', doc });
   }
 }
 
@@ -112,8 +143,8 @@ export async function fetchOverlay(id, label, doc = document) {
     const data = await fetchJSON(`/analytics/job/${id}/equity`);
     upsertOverlay(id, normalizeEquity(data), label);
     updateCsvLink(doc);
-  } catch {
-    showToast('Failed to load overlay', { type: 'error', doc });
+  } catch (e) {
+    showToast(`Failed to load overlay ${e.message || ''}`.trim(), { type: 'error', doc });
   }
 }
 
@@ -122,8 +153,8 @@ export async function fetchJobs(doc = document) {
     const data = await fetchJSON('/analytics/jobs?limit=20');
     renderJobsTable(data.jobs || data, doc);
     renderOverlayList(data.jobs || data, doc);
-  } catch {
-    showToast('Failed to load jobs', { type: 'error', doc });
+  } catch (e) {
+    showToast(`Failed to load jobs ${e.message || ''}`.trim(), { type: 'error', doc });
   }
 }
 
@@ -136,10 +167,7 @@ function renderOverlayList(list, doc) {
     const cb = doc.createElement('input');
     cb.type = 'checkbox';
     cb.dataset.jobId = job.id;
-    cb.addEventListener('change', e => {
-      if (cb.checked) fetchOverlay(job.id, overlayLabel(job), doc);
-      else { removeOverlay(job.id); updateCsvLink(doc); }
-    });
+    cb.addEventListener('change', () => handleOverlayToggle(job, doc));
     wrap.appendChild(cb);
     const label = doc.createElement('span');
     label.textContent = overlayLabel(job);
@@ -163,20 +191,41 @@ export function updateCsvLink(doc = document) {
   const link = doc.querySelector('[data-export-csv]');
   if (!link) return;
   const ids = Array.from(state.overlays.keys());
-  if (ids.length === 0) { link.href = '#'; return; }
   link.href = composeCsvUrl(ids, { from_ms: state.filters.from_ms, to_ms: state.filters.to_ms });
+}
+
+export async function handleOverlayToggle(job, doc = document) {
+  const id = job.id ?? job;
+  if (state.overlays.has(String(id))) {
+    removeOverlay(id);
+    updateCsvLink(doc);
+    return;
+  }
+  await fetchOverlay(id, overlayLabel(job), doc);
 }
 
 export function init(doc = document) {
   const canvas = doc.querySelector('[data-equity]');
   if (!canvas) return;
   state.chart = initEquityChart(canvas.getContext('2d'));
+  loadFilters(doc);
   fetchBaseline(doc);
   fetchJobs(doc);
   const refreshBtn = doc.querySelector('[data-jobs-refresh]');
   if (refreshBtn) refreshBtn.addEventListener('click', () => fetchJobs(doc));
   const applyBtn = doc.querySelector('[data-apply]');
-  if (applyBtn) applyBtn.addEventListener('click', () => fetchBaseline(doc));
+  if (applyBtn) applyBtn.addEventListener('click', () => {
+    state.filters = {
+      symbol: doc.querySelector('[name=symbol]').value,
+      interval: doc.querySelector('[name=interval]').value,
+      from_ms: doc.querySelector('[name=from]').value,
+      to_ms: doc.querySelector('[name=to]').value,
+      ds: doc.querySelector('[name=ds]').value,
+      n: Number(doc.querySelector('[name=n]').value),
+    };
+    persistFilters();
+    fetchBaseline(doc);
+  });
   const resetBtn = doc.querySelector('[data-reset]');
   if (resetBtn) resetBtn.addEventListener('click', () => {
     doc.querySelector('[name=symbol]').value = 'SOLUSDT';
@@ -186,6 +235,7 @@ export function init(doc = document) {
     doc.querySelector('[name=ds]').value = 'lttb';
     doc.querySelector('[name=n]').value = '1000';
     state.filters = { symbol:'SOLUSDT', interval:'1m', from_ms:'', to_ms:'', ds:'lttb', n:1000 };
+    persistFilters();
     fetchBaseline(doc);
   });
 }

@@ -6,9 +6,10 @@ const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i)[1].replace(/<script[^>]
 
 function setupDom() {
   document.body.innerHTML = body;
+  localStorage.clear();
   window.__DISABLE_AUTO_INIT__ = true;
   global.Chart = class {
-    constructor(ctx, cfg){ this.ctx=ctx; this.data=cfg.data; this.update=jest.fn(); }
+    constructor(ctx, cfg){ this.ctx=ctx; this.data=cfg.data; this.options=cfg.options; this.update=jest.fn(); }
   };
 }
 
@@ -81,6 +82,59 @@ describe('analytics ui', () => {
     cb.checked = false; cb.dispatchEvent(new Event('change'));
     await flush();
     expect(chart.data.datasets.length).toBe(1);
+    expect(link.href.endsWith('#')).toBe(true);
+  });
+
+  test('filters persisted and loaded from localStorage', async () => {
+    setupDom();
+    localStorage.setItem('analyticsFilters', JSON.stringify({ symbol:'BTCUSDT', interval:'5m', from_ms:'1', to_ms:'2', ds:'lttb', n:5 }));
+    const baseline = [{ ts:1, equity:2 }];
+    const jobs = [];
+    global.fetch = jest.fn(url => {
+      if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(new Response(JSON.stringify(baseline)));
+      if (url.startsWith('/analytics/jobs')) return Promise.resolve(new Response(JSON.stringify(jobs)));
+      return Promise.reject('u');
+    });
+    jest.resetModules();
+    const mod = await import('../../client/public/assets/analytics.js');
+    const setSpy = jest.spyOn(Storage.prototype, 'setItem');
+    mod.init(document);
+    await flush();
+    expect(document.querySelector('[name=symbol]').value).toBe('BTCUSDT');
+    document.querySelector('[name=interval]').value = '15m';
+    document.querySelector('[data-apply]').click();
+    await flush();
+    expect(setSpy).toHaveBeenCalled();
+    setSpy.mockRestore();
+  });
+
+  test('legend click toggles visibility only', async () => {
+    setupDom();
+    const baseline = [{ ts:1, equity:2 }];
+    const jobs = [{ id:7, strategy:'A' }];
+    const overlay = [{ ts:2, equity:3 }];
+    global.fetch = jest.fn(url => {
+      if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(new Response(JSON.stringify(baseline)));
+      if (url.startsWith('/analytics/jobs')) return Promise.resolve(new Response(JSON.stringify(jobs)));
+      if (url === '/analytics/job/7/equity') return Promise.resolve(new Response(JSON.stringify(overlay)));
+      return Promise.reject('u');
+    });
+    jest.resetModules();
+    const mod = await import('../../client/public/assets/analytics.js');
+    mod.init(document);
+    await flush();
+    const cb = document.querySelector('[data-overlays-list] input');
+    cb.checked = true; cb.dispatchEvent(new Event('change'));
+    await flush();
+    const chart = mod.getChart();
+    const link = document.querySelector('[data-export-csv]');
+    const handler = chart.options.plugins.legend.onClick;
+    handler({}, { datasetIndex:1 }, { chart });
+    expect(chart.data.datasets[1].hidden).toBe(true);
+    expect(link.href).toContain('ids=7');
+    handler({}, { datasetIndex:1 }, { chart });
+    expect(chart.data.datasets[1].hidden).toBe(false);
+    expect(link.href).toContain('ids=7');
   });
 
   test('error toast on API error', async () => {
