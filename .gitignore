@@ -28,3 +28,4 @@ client/dist/
 
 # E2E screenshots
 tests/e2e/__screenshots__/
+deploy/pgdata/*
