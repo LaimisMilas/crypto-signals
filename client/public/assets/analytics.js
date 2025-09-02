@@ -1,4 +1,11 @@
 import { showToast } from './ui-toast.js';
+import {
+  composeAnalyticsQuery,
+  normalizeEquity,
+  overlayLabel,
+  composeCsvUrl,
+} from '../../assets/analytics.helpers.js';
+export { composeAnalyticsQuery, normalizeEquity, overlayLabel, composeCsvUrl };
 
 const ChartLib = globalThis.Chart;
 if (ChartLib?.register && ChartLib.registerables) {
@@ -13,6 +20,7 @@ const state = {
     interval: '1m',
     from_ms: '',
     to_ms: '',
+    strategy: '',
     ds: 'lttb',
     n: 1000,
   },
@@ -32,39 +40,11 @@ export function loadFilters(doc = document, store = localStorage) {
     doc.querySelector('[name=interval]').value = state.filters.interval || '';
     doc.querySelector('[name=from]').value = state.filters.from_ms || '';
     doc.querySelector('[name=to]').value = state.filters.to_ms || '';
+    const stratEl = doc.querySelector('[name=strategy]');
+    if (stratEl) stratEl.value = state.filters.strategy || '';
     doc.querySelector('[name=ds]').value = state.filters.ds || '';
     doc.querySelector('[name=n]').value = String(state.filters.n ?? '');
   } catch {}
-}
-
-export function composeAnalyticsQuery(p) {
-  const q = new URLSearchParams();
-  if (p.symbol) q.set('symbol', p.symbol);
-  if (p.interval) q.set('interval', p.interval);
-  if (p.from_ms) q.set('from_ms', p.from_ms);
-  if (p.to_ms) q.set('to_ms', p.to_ms);
-  if (p.ds) q.set('ds', p.ds);
-  if (p.n !== undefined) q.set('n', p.n);
-  return q.toString();
-}
-
-export function normalizeEquity(list) {
-  const res = list.map(p => ({ x: Number(p.ts ?? p.ms), y: Number(p.equity) }));
-  res.sort((a, b) => a.x - b.x);
-  return res;
-}
-
-export function overlayLabel(job) {
-  return `${job.id}:${job.strategy || ''}`;
-}
-
-export function composeCsvUrl(ids = [], range = {}) {
-  if (!ids.length) return '#';
-  const q = new URLSearchParams();
-  q.set('ids', ids.join(','));
-  if (range.from_ms) q.set('from_ms', range.from_ms);
-  if (range.to_ms) q.set('to_ms', range.to_ms);
-  return `/analytics/overlays.csv?${q.toString()}`;
 }
 
 export function initEquityChart(ctx) {
@@ -90,7 +70,8 @@ export function initEquityChart(ctx) {
   });
 }
 
-export function setBaseline(series) {
+export function setBaseline(points) {
+  const series = points.map(p => ({ x: p.ts, y: p.equity }));
   const ds = {
     id: 'baseline',
     label: 'Baseline',
@@ -103,8 +84,9 @@ export function setBaseline(series) {
   state.chart.update();
 }
 
-export function upsertOverlay(id, series, label) {
-  state.overlays.set(String(id), series);
+export function upsertOverlay(id, points, label) {
+  state.overlays.set(String(id), points);
+  const series = points.map(p => ({ x: p.ts, y: p.equity }));
   const ds = { id: `overlay-${id}`, label, data: series, fill: false };
   const i = state.chart.data.datasets.findIndex(d => d.id === `overlay-${id}`);
   if (i >= 0) state.chart.data.datasets[i] = ds; else state.chart.data.datasets.push(ds);
@@ -130,8 +112,15 @@ export async function fetchBaseline(doc = document) {
     const qs = composeAnalyticsQuery(state.filters);
     const url = `/analytics?baseline=live&${qs}`;
     const data = await fetchJSON(url);
-    const series = normalizeEquity(data);
+    const rawEquity = Array.isArray(data) ? data : data?.equity;
+    if (!Array.isArray(rawEquity)) throw new Error('Bad equity data');
+    const series = normalizeEquity(rawEquity);
     setBaseline(series);
+    const eqLink = doc.getElementById('csv-equity');
+    const trLink = doc.getElementById('csv-trades');
+    const links = data.links || {};
+    if (eqLink) eqLink.href = links.equity || '#';
+    if (trLink) trLink.href = links.trades || '#';
     updateCsvLink(doc);
   } catch (e) {
     showToast(`Failed to load baseline ${e.message || ''}`.trim(), { type: 'error', doc });
@@ -141,7 +130,9 @@ export async function fetchBaseline(doc = document) {
 export async function fetchOverlay(id, label, doc = document) {
   try {
     const data = await fetchJSON(`/analytics/job/${id}/equity`);
-    upsertOverlay(id, normalizeEquity(data), label);
+    const series = Array.isArray(data) ? normalizeEquity(data) : normalizeEquity(data?.equity);
+    if (!series.length && !Array.isArray(data)) throw new Error('Bad equity data');
+    upsertOverlay(id, series, label);
     updateCsvLink(doc);
   } catch (e) {
     showToast(`Failed to load overlay ${e.message || ''}`.trim(), { type: 'error', doc });
@@ -220,6 +211,7 @@ export function init(doc = document) {
       interval: doc.querySelector('[name=interval]').value,
       from_ms: doc.querySelector('[name=from]').value,
       to_ms: doc.querySelector('[name=to]').value,
+      strategy: doc.querySelector('[name=strategy]')?.value || '',
       ds: doc.querySelector('[name=ds]').value,
       n: Number(doc.querySelector('[name=n]').value),
     };
@@ -232,9 +224,11 @@ export function init(doc = document) {
     doc.querySelector('[name=interval]').value = '1m';
     doc.querySelector('[name=from]').value = '';
     doc.querySelector('[name=to]').value = '';
+    const stratEl = doc.querySelector('[name=strategy]');
+    if (stratEl) stratEl.value = '';
     doc.querySelector('[name=ds]').value = 'lttb';
     doc.querySelector('[name=n]').value = '1000';
-    state.filters = { symbol:'SOLUSDT', interval:'1m', from_ms:'', to_ms:'', ds:'lttb', n:1000 };
+    state.filters = { symbol:'SOLUSDT', interval:'1m', from_ms:'', to_ms:'', strategy:'', ds:'lttb', n:1000 };
     persistFilters();
     fetchBaseline(doc);
   });
