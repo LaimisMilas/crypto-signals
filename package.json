@@ -15,6 +15,7 @@
     "test:cov": "cross-env TZ=UTC NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "test:client": "cross-env TZ=UTC NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest -c jest.client.config.cjs",
     "test:cov:client": "cross-env TZ=UTC NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest -c jest.client.config.cjs --coverage",
+    "test:client:quick": "cross-env TZ=UTC NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest -c jest.client.config.cjs --maxWorkers=50%",
     "coverage:client": "npm run test:cov:client && node -e \"const b=require('fs').existsSync('coverage-client/coverage-summary.json')&&console.log('OK');\"",
     "coverage:client:json": "npm run test:cov:client && test -f coverage-client/coverage-summary.json && echo OK || (echo 'NO coverage-summary.json' && exit 1)",
     "test:observ": "node scripts/smoke-observ.js",
