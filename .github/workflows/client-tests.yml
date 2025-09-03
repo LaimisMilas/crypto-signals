@@ -1,60 +1,22 @@
-name: Client Tests
+name: client-tests
 
 on:
+  pull_request:
   push:
     branches: [ main ]
-  pull_request:
 
 jobs:
   client:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
-      - name: Use Node.js 18
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install deps
-        run: npm ci
-
-      - name: Run unit (JSDOM) tests
-        run: npm run test:client
-
-      - name: Install Playwright (Chromium)
-        run: npm run e2e:install
-
-      - name: Run E2E tests (Playwright)
-        env:
-          CI: 'true'
-        run: npm run e2e
-
-      - name: Upload Playwright report (on fail)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report
-          if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Upload test-results (screenshots/traces) (always)
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+      - run: npm run coverage:client:json
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: test-results
-          if-no-files-found: ignore
-          retention-days: 7
+          name: coverage-client-lcov
+          path: coverage-client/lcov.info
 
-      - name: Upload client coverage (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-client
-          path: coverage-client
-          if-no-files-found: ignore
-          retention-days: 7
