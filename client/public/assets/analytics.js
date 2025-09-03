@@ -48,7 +48,7 @@ export function loadFilters(doc = document, store = localStorage) {
 }
 
 export function initEquityChart(ctx) {
-  return new ChartLib(ctx, {
+  const chart = new ChartLib(ctx, {
     type: 'line',
     data: { datasets: [] },
     options: {
@@ -68,6 +68,8 @@ export function initEquityChart(ctx) {
       },
     },
   });
+  state.chart = chart;
+  return chart;
 }
 
 export function setBaseline(points) {

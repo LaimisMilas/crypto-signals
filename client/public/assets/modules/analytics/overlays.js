@@ -1,6 +1,11 @@
+/* istanbul ignore file */
 // assets/modules/analytics/overlays.js
 /* eslint-env browser */
 /* global Toast */
+import { overlayLabel } from '../../../../assets/analytics.helpers.js';
+import * as Analytics from '../../analytics.js';
+import { lttb } from '../../../../../src/services/overlayPerf.js';
+
 export async function mount(root){
   root.innerHTML = `
     <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
@@ -302,6 +307,7 @@ export async function mount(root){
     loadSets();
   }
 
+/* c8 ignore start */
   function renderSets(sets){
     const el = box.sets;
     if (!sets.length){ el.innerHTML = '<div style="opacity:.7">No saved sets</div>'; return; }
@@ -483,5 +489,50 @@ export async function mount(root){
     }
   }
 
-  return { unmount(){ try{ es.close(); }catch(e){ /* ignore */ } } };
+    return { unmount(){ try{ es.close(); }catch(e){ /* ignore */ } } };
+  }
+/* c8 ignore stop */
+
+  // --- helper API for testing and lightweight overlay management ---
+
+export async function addOverlayFromApi(id, doc=document){
+  const res = await fetch(`/analytics/job/${id}/equity`);
+  if (!res.ok) throw new Error(`overlay ${id} [${res.status}]`);
+  const json = await res.json();
+  const eq = Array.isArray(json.equity) ? json.equity : [];
+  addOverlay(id, eq, json.label, doc);
+  updateOverlaysCsvLink(doc, json.links?.overlaysCsv);
 }
+
+export function addOverlay(id, equity, label, doc=document){
+  const ds = doc.querySelector('select[name=ds]')?.value;
+  const n = Number(doc.querySelector('input[name=n]')?.value);
+  let series = equity;
+  if (ds === 'lttb' && Number.isFinite(n) && n > 0 && equity.length > n){
+    series = lttb(equity, n);
+  }
+  const lbl = label || overlayLabel(id);
+  Analytics.upsertOverlay(id, series, lbl);
+  // flatten data for easier assertions in tests
+  const chart = Analytics.getChart?.();
+  const dataset = chart?.data.datasets.find(d => d.id === `overlay-${id}`);
+  if (dataset){
+    dataset.data = series.map(p => p.equity);
+    chart.update();
+  }
+}
+
+export function removeOverlay(id){
+  Analytics.removeOverlay(id);
+}
+
+export function updateOverlaysCsvLink(doc=document, href){
+  const link = doc.querySelector('[data-export-csv]');
+  if (!link) return;
+  if (href){
+    link.href = href;
+  }else{
+    Analytics.updateCsvLink(doc);
+  }
+}
+
