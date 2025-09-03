@@ -6,6 +6,7 @@ module.exports = {
     '\\.(css|less|scss)$': '<rootDir>/tests/setup/styleStub.js',
   },
   coverageDirectory: 'coverage-client',
+  coverageReporters: ['text', 'text-summary', 'json-summary', 'lcov'],
   collectCoverageFrom: [
     'client/assets/**/*.js',
     'client/public/**/*.js',

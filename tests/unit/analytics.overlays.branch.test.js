@@ -31,6 +31,7 @@ function setupDom(){
 describe('analytics overlays extra branches', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.resetModules();
     document.body.innerHTML = '';
     delete global.fetch;
     delete global.Chart;
@@ -111,5 +112,22 @@ describe('analytics overlays extra branches', () => {
     const href = document.querySelector('[data-export-csv]').getAttribute('href');
     const expected = helpers.composeCsvUrl(['3'], { from_ms:'10', to_ms:'20' });
     expect(href).toBe(expected);
+  });
+
+  test('updateCsvLink handles missing link and ids', async () => {
+    setupDom();
+    const baseline = { equity:[{ ts:1, equity:1 }], links:{} };
+    global.fetch = jest.fn(url => {
+      if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
+      if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse([]));
+      return Promise.reject('u');
+    });
+    const mod = await import('../../client/public/assets/analytics.js');
+    mod.init(document);
+    await flush();
+    mod.updateCsvLink(document);
+    expect(document.querySelector('[data-export-csv]').getAttribute('href')).toBe('#');
+    document.querySelector('[data-export-csv]').remove();
+    expect(() => mod.updateCsvLink(document)).not.toThrow();
   });
 });
