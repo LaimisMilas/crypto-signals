@@ -16,6 +16,7 @@
     "test:client": "cross-env TZ=UTC NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest -c jest.client.config.cjs",
     "test:cov:client": "cross-env TZ=UTC NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest -c jest.client.config.cjs --coverage",
     "coverage:client": "npm run test:cov:client && node -e \"const b=require('fs').existsSync('coverage-client/coverage-summary.json')&&console.log('OK');\"",
+    "coverage:client:json": "npm run test:cov:client && test -f coverage-client/coverage-summary.json && echo OK || (echo 'NO coverage-summary.json' && exit 1)",
     "test:observ": "node scripts/smoke-observ.js",
     "k6:http": "k6 run tests/k6/http-smoke.js",
     "build": "echo \"(optional) build step for FE bundling\"",

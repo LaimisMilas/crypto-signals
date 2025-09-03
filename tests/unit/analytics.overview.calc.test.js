@@ -28,4 +28,19 @@ describe('analytics overview calculations', () => {
     expect(window.AnalyticsChart.data.datasets.length).toBe(0);
     api.unmount();
   });
+
+  test('align first-common and rebase', async () => {
+    setup();
+    const root = document.getElementById('root');
+    const { mount } = await import('../../client/public/assets/modules/analytics/overview.js');
+    await mount(root);
+    const items = [
+      { jobId:1, label:'A', equity:[{ts:1,equity:100},{ts:3,equity:200}] },
+      { jobId:2, label:'B', equity:[{ts:2,equity:50},{ts:3,equity:75}] }
+    ];
+    window.dispatchEvent(new CustomEvent('analytics:overlays:v2', { detail:{ items, baseline:null, settings:{ align:'first-common', rebase:100 } } }));
+    expect(window.AnalyticsChart.data.datasets.length).toBe(2);
+    expect(window.AnalyticsChart.data.datasets[0].data[0]).toEqual({ x:3, y:100 });
+    expect(window.AnalyticsChart.data.datasets[1].data[0]).toEqual({ x:3, y:100 });
+  });
 });
