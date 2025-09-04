@@ -515,7 +515,7 @@ export function addOverlay(id, equity, label, doc=document){
   Analytics.upsertOverlay(id, series, lbl);
   // flatten data for easier assertions in tests
   const chart = Analytics.getChart?.();
-  const dataset = chart?.data.datasets.find(d => d.id === `overlay-${id}`);
+  const dataset = chart?.data.datasets.find(d => d.id === `overlay:${id}`);
   if (dataset){
     dataset.data = series.map(p => p.equity);
     chart.update();

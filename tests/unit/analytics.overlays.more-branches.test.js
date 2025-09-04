@@ -69,6 +69,8 @@ describe('analytics overlays – extra branches', () => {
   test('update CSV with two overlays and full range sets correct href', () => {
     Analytics.upsertOverlay('a', [{ ts:1, equity:101 }], 'Overlay: a');
     Analytics.upsertOverlay('b', [{ ts:2, equity:102 }], 'Overlay: b');
+    const host = document.querySelector('[data-overlays-list]');
+    host.innerHTML = '<div><input type="checkbox" data-job-id="a" checked></div><div><input type="checkbox" data-job-id="b" checked></div>';
     Analytics.updateCsvLink(document);
     const expected = Helpers.composeCsvUrl(['a','b'], { from_ms:'', to_ms:'', ds:'lttb', n:1000 });
     expect(document.querySelector('[data-export-csv]').getAttribute('href')).toBe(expected);
@@ -78,6 +80,7 @@ describe('analytics overlays – extra branches', () => {
     const fetchMock = jest.fn()
       .mockResolvedValueOnce(json({ equity:[{ ts:1, equity:100 }], links:{} })) // baseline
       .mockResolvedValueOnce(json([])) // jobs
+      .mockResolvedValueOnce(json({})) // portfolio
       .mockResolvedValueOnce(new Response('x', { status:500 }))
       .mockResolvedValueOnce(new Response('x', { status:404 }))
       .mockResolvedValueOnce(json({ equity:null }))

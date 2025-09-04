@@ -5,7 +5,7 @@ module.exports = {
   moduleNameMapper: {
     '\\.(css|less|scss)$': '<rootDir>/tests/setup/styleStub.js',
   },
-  modulePathIgnorePatterns: ['<rootDir>/client/dist/'],
+  modulePathIgnorePatterns: ['<rootDir>/client/dist/', '<rootDir>/client/public/assets/vendor/__mocks__'],
   testPathIgnorePatterns: ['<rootDir>/client/dist/'],
   coveragePathIgnorePatterns: ['<rootDir>/client/dist/'],
   coverageDirectory: 'coverage-client',

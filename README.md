@@ -1,4 +1,4 @@
-![Client Tests](https://github.com/your-org/crypto-signals/actions/workflows/client-tests.yml/badge.svg) ![Client Coverage](https://img.shields.io/badge/coverage--client-unknown-lightgrey)
+![Client Tests](https://github.com/your-org/crypto-signals/actions/workflows/client-tests.yml/badge.svg) ![Client Coverage](https://img.shields.io/badge/client%20coverage-92.79%25-brightgreen)
 
 # Crypto Signals MVP (Stripe + React + Docker)
 
@@ -116,10 +116,11 @@ Start a lightweight dev server to view it locally:
 npm run serve:client
 ```
 
-Client-side tests cover the UI logic:
-
-- `npm run test:client` – run browser-like tests in JSDOM.
-- `npm run test:cov:client` – generate client coverage reports.
+## Tests (client)
+```bash
+npm run test:client          # fast run (no coverage)
+npm run coverage:client:json # with coverage + JSON summary
+```
 
 The page expects backend endpoints `/analytics`, `/analytics/jobs`, `/analytics/job/:id/equity`, and `/portfolio`.
 During tests these requests are mocked via `whatwg-fetch`.

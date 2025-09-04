@@ -35,6 +35,7 @@ coverage-client/
 coverage/
 
 # Build output
+client/dist/
 public/
 
 # Playwright cache/artifacts
