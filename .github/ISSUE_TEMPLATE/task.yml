@@ -1,0 +1,84 @@
+name: Task
+description: Maža, savarankiška užduotis su aiškais AC ir testais
+title: "T: <trumpas pavadinimas>"
+labels: ["type/feature"] # keisk, jei reikia
+body:
+  - type: dropdown
+    id: goal
+    attributes:
+      label: Goal
+      description: Kuris projekto tikslas?
+      options: ["G1","G2","G3","G4","G5"]
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Prioritetas
+      options: ["P1","P2","P3"]
+      description: "P1 – kritinis; P2 – svarbus; P3 – nice-to-have"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Sritis
+      options: ["area/backend","area/ui","area/monitoring","area/ci-cd","area/integrations","area/notifications","business"]
+      description: Pasirink aktualiausią "area/*"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Kontekstas
+      description: Trumpai – kas, kodėl, dabartinė būsena
+      placeholder: Kodėl šito reikia, kokia problema?
+  - type: textarea
+    id: scope
+    attributes:
+      label: Apimtis
+      description: Ką darom? (konkretūs deliverables)
+      placeholder: • ...
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Neapimta
+      description: Kas specialiai NEbus daroma?
+      placeholder: • ...
+  - type: textarea
+    id: ac
+    attributes:
+      label: Acceptance Criteria
+      description: Patikrinami, objektyvūs kriterijai
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Planas (maži žingsniai)
+      placeholder: |
+        - [ ] 1 mažas commit'as...
+        - [ ] 2 mažas commit'as...
+  - type: textarea
+    id: tests
+    attributes:
+      label: Testų planas / įrodymai
+      placeholder: Kaip patikrinsim? (pytest/e2e, logai, screenshot)
+  - type: textarea
+    id: metrics
+    attributes:
+      label: Metrikos / SLO
+      placeholder: pvz., alert latency ≤ 1 min; uptime ≥ 99%
+  - type: textarea
+    id: links
+    attributes:
+      label: Nuorodos
+      placeholder: PR/diagramų/docs nuorodos
+  - type: textarea
+    id: risk
+    attributes:
+      label: Rizikos ir Rollback
+      placeholder: Rizikos ir kaip grįžtam atgal

@@ -1,0 +1,29 @@
+name: Goal (tracking)
+description: Aukštesnio lygmens tikslas (tracking issue)
+title: "[Gx] <tikslas>"
+labels: ["type/tracking"]
+body:
+  - type: textarea
+    id: goal_desc
+    attributes:
+      label: Aprašymas
+      placeholder: Esmė, scope ribos, priklausomybės
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: Sėkmės metrika
+      placeholder: pvz., accuracy ≥70% sandbox'e; alert latency ≤1 min
+  - type: textarea
+    id: done
+    attributes:
+      label: DONE apibrėžimas
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+  - type: textarea
+    id: related
+    attributes:
+      label: Susiję darbai (Tasks)
+      placeholder: T2, T4, ...
