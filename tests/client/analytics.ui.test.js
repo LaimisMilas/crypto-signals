@@ -21,7 +21,10 @@ describe('analytics ui', () => {
   test('compose + apply builds query without empty strategy', async () => {
     setupDom();
     const baseline = { equity:[{ ts:1, equity:1 }], links:{} };
-    global.fetch = jest.fn(() => Promise.resolve(createJsonResponse(baseline)));
+    global.fetch = jest.fn(url => {
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
+      return Promise.resolve(createJsonResponse(baseline));
+    });
     jest.resetModules();
     const mod = await import('../../client/public/assets/analytics.js');
     mod.init(document);
@@ -46,6 +49,7 @@ describe('analytics ui', () => {
     global.fetch = jest.fn(url => {
       if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
       if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse([]));
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
       return Promise.reject('unknown');
     });
     jest.resetModules();
@@ -64,7 +68,10 @@ describe('analytics ui', () => {
   test('reset clears filters', async () => {
     setupDom();
     const baseline = { equity:[], links:{} };
-    global.fetch = jest.fn(() => Promise.resolve(createJsonResponse(baseline)));
+    global.fetch = jest.fn(url => {
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
+      return Promise.resolve(createJsonResponse(baseline));
+    });
     jest.resetModules();
     const mod = await import('../../client/public/assets/analytics.js');
     mod.init(document);
@@ -88,6 +95,7 @@ describe('analytics ui', () => {
       if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
       if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse(jobs));
       if (url === '/analytics/job/7/equity') return Promise.resolve(createJsonResponse(overlay));
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
       return Promise.reject('u');
     });
     jest.resetModules();
@@ -108,7 +116,10 @@ describe('analytics ui', () => {
 
   test('error 500 shows toast', async () => {
     setupDom();
-    global.fetch = jest.fn(() => Promise.resolve(new Response('',{ status:500 })));
+    global.fetch = jest.fn(url => {
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
+      return Promise.resolve(new Response('',{ status:500 }));
+    });
     jest.resetModules();
     const mod = await import('../../client/public/assets/analytics.js');
     mod.init(document);
@@ -122,6 +133,7 @@ describe('analytics ui', () => {
     global.fetch = jest.fn(url => {
       if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
       if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse([]));
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
       return Promise.reject('u');
     });
     jest.resetModules();
@@ -139,6 +151,7 @@ describe('analytics ui', () => {
     global.fetch = jest.fn(url => {
       if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(bad));
       if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse([]));
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
       return Promise.reject('u');
     });
     jest.resetModules();
@@ -156,6 +169,7 @@ describe('analytics ui', () => {
       if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
       if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse(jobs));
       if (url === '/analytics/job/5/equity') return Promise.resolve(new Response('',{ status:404 }));
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
       return Promise.reject('u');
     });
     jest.resetModules();
@@ -179,6 +193,7 @@ describe('analytics ui', () => {
       if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
       if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse(jobs));
       if (url === '/analytics/job/7/equity') return Promise.resolve(createJsonResponse(overlay));
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
       return Promise.reject('u');
     });
     jest.resetModules();

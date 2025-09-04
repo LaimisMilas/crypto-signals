@@ -24,6 +24,7 @@ describe('analytics ui ext', () => {
     global.fetch = jest.fn(url => {
       if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
       if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse([]));
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
       return Promise.reject('u');
     });
     jest.resetModules();
@@ -51,6 +52,7 @@ describe('analytics ui ext', () => {
     global.fetch = jest.fn(url => {
       if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
       if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse([]));
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
       return Promise.reject('u');
     });
     jest.resetModules();
@@ -75,6 +77,7 @@ describe('analytics ui ext', () => {
     global.fetch = jest.fn(url => {
       if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
       if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse([]));
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
       return Promise.reject('u');
     });
     jest.resetModules();
@@ -86,6 +89,8 @@ describe('analytics ui ext', () => {
     document.querySelector('[name=to]').value = '2';
     document.querySelector('[data-apply]').click();
     await flush();
+    const host = document.querySelector('[data-overlays-list]');
+    host.innerHTML = '<div><input type="checkbox" data-job-id="7" checked></div><div><input type="checkbox" data-job-id="8" checked></div>';
     mod.upsertOverlay('7', [{ ts:1, equity:2 }], 'A');
     mod.upsertOverlay('8', [{ ts:1, equity:3 }], 'B');
     mod.updateCsvLink(document);

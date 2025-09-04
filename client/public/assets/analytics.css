@@ -1,3 +1,6 @@
 .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}
 .card{border:1px solid #222;padding:16px;border-radius:8px;margin-bottom:16px;background:#111}
 .overlays-list div{margin:4px 0}
+table{width:100%;border-collapse:collapse}
+th,td{padding:4px;border:1px solid #333}
+table.mini th,table.mini td{font-size:12px;padding:2px 4px}
