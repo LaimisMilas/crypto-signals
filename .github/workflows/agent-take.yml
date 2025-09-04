@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   take:
+    # tik Issue (ne PR) ir tik kai komentare yra /scaffold
     if: ${{ github.event.issue.pull_request == null && contains(github.event.comment.body, '/scaffold') }}
     runs-on: ubuntu-latest
     steps:
@@ -21,13 +22,15 @@ jobs:
         run: |
           ALLOWED="${{ vars.AGENT_ALLOWED || github.repository_owner }}"
           if [[ "${{ github.actor }}" != "$ALLOWED" ]]; then
-            echo "Not allowed: ${{ github.actor }}"; exit 1; fi
+            echo "Not allowed: ${{ github.actor }}"
+            exit 1
+          fi
 
       - name: Compute vars
         id: vars
         run: |
-          echo "NUM=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
-          echo "BRANCH=scaffold/issue-${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          echo "NUM=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+          echo "BRANCH=scaffold/issue-${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
 
       - name: Prepare git
         run: |
@@ -41,7 +44,6 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           if [ -f .github/agent_plan_template.md ]; then
-            # paprastas įterpimas
             sed "s|\$ISSUE_TITLE|${ISSUE_TITLE}|g; s|\$ISSUE_BODY|${ISSUE_BODY}|g; s|\$ISSUE_NUMBER|${{ steps.vars.outputs.NUM }}|g" \
               .github/agent_plan_template.md > AGENT_PLAN.md
           else
