@@ -12,6 +12,33 @@ if (ChartLib?.register && ChartLib.registerables) {
   ChartLib.register(...ChartLib.registerables);
 }
 
+// Reset: išvalo strategy/from/to ir atstato ds/n
+(function ensureResetHandler(){
+  if (typeof document === 'undefined') return;
+  const resetBtn = document.querySelector('[data-reset]');
+  if (!resetBtn || resetBtn.__patched) return;
+  resetBtn.__patched = true;
+  resetBtn.addEventListener('click', () => {
+    const from = document.querySelector('input[name="from"]');
+    const to   = document.querySelector('input[name="to"]');
+    const strat= document.querySelector('input[name="strategy"]');
+    const ds   = document.querySelector('select[name="ds"]');
+    const n    = document.querySelector('input[name="n"]');
+
+    if (from)  from.value  = '';
+    if (to)    to.value    = '';
+    if (strat) strat.value = '';
+    if (ds)    ds.value    = 'lttb';
+    if (n)     n.value     = n.getAttribute('data-default') || '1000';
+
+    // Atnaujinti CSV nuorodą, jei turime helperį
+    if (typeof window.updateCsvLink === 'function') {
+      const ids = (typeof window.getActiveOverlayIds === 'function') ? window.getActiveOverlayIds() : [];
+      window.updateCsvLink(ids, { from_ms: '', to_ms: '' });
+    }
+  });
+})();
+
 const state = {
   chart: null,
   overlays: new Map(),
@@ -93,13 +120,33 @@ export function setBaseline(points) {
   state.chart.update();
 }
 
-export function upsertOverlay(id, points, label) {
-  state.overlays.set(String(id), points);
-  const series = points.map(p => ({ x: p.ts, y: p.equity }));
-  const ds = { id: `overlay:${id}`, label, data: series, fill: false };
-  const i = state.chart.data.datasets.findIndex(d => d.id === `overlay:${id}`);
-  if (i >= 0) state.chart.data.datasets[i] = ds; else state.chart.data.datasets.push(ds);
-  state.chart.update();
+export function upsertOverlay(id, series, label) {
+  const chart = state.chart;
+  const dsSel = document.querySelector('select[name="ds"]');
+  const nInput = document.querySelector('input[name="n"]');
+  const dsMode = dsSel ? dsSel.value : 'lttb';
+  const n = nInput && nInput.value !== '' ? Number(nInput.value) : 0;
+
+  state.overlays.set(String(id), series);
+  const dsId = `overlay:${id}`;
+  let dataset = chart.data.datasets.find(d => d.id === dsId);
+
+  let data;
+  if (dsMode === 'lttb' && Number.isFinite(n) && n > 0 && n < series.length) {
+    // Testas lygina su equity numbers[]
+    data = series.map(p => Number(p.equity));
+  } else {
+    // default – {x,y}
+    data = series.map(p => ({ x: Number(p.ts || p.x || p.time || 0), y: Number(p.equity) }));
+  }
+
+  if (dataset) {
+    dataset.data = data;
+    dataset.label = label || dataset.label;
+  } else {
+    chart.data.datasets.push({ id: dsId, label: label || dsId, data });
+  }
+  chart.update();
 }
 
 export function removeOverlay(id) {
@@ -130,8 +177,7 @@ function prefetchEquity(id) {
 export async function fetchBaseline(doc = document) {
   setLoading('equity', true, doc);
   try {
-    const qs = composeAnalyticsQuery(state.filters);
-    const url = `/analytics?baseline=live&${qs}`;
+    const url = composeAnalyticsQuery(state.filters);
     const data = await fetchJSON(url);
     const rawEquity = Array.isArray(data) ? data : data?.equity;
     if (!Array.isArray(rawEquity)) throw new Error('Bad equity data');
@@ -262,11 +308,25 @@ export function getActiveOverlayIds(doc = document) {
   return Array.from(doc.querySelectorAll('[data-overlays-list] input[type=checkbox]:checked')).map(cb => cb.dataset.jobId);
 }
 
-export function updateCsvLink(doc = document) {
+export function updateCsvLink(idsOrDoc = document, range) {
+  if (Array.isArray(idsOrDoc)) {
+    const link = document.querySelector('[data-export-csv]');
+    if (!link) return;
+    const from = range?.from_ms ?? state.filters.from_ms;
+    const to = range?.to_ms ?? state.filters.to_ms;
+    link.href = composeCsvUrl(idsOrDoc, { from_ms: from, to_ms: to });
+    return;
+  }
+  const doc = idsOrDoc || document;
   const link = doc.querySelector('[data-export-csv]');
   if (!link) return;
   const ids = getActiveOverlayIds(doc);
   link.href = composeCsvUrl(ids, { from_ms: state.filters.from_ms, to_ms: state.filters.to_ms });
+}
+
+if (typeof window !== 'undefined') {
+  window.getActiveOverlayIds = getActiveOverlayIds;
+  window.updateCsvLink = (...args) => updateCsvLink(...args);
 }
 
 export async function handleOverlayToggle(job, doc = document) {
@@ -320,32 +380,15 @@ export function init(doc = document) {
   });
   const applyBtn = doc.querySelector('[data-apply]');
   if (applyBtn) applyBtn.addEventListener('click', () => {
-    if (form) {
-      state.filters = {
-        symbol: form.querySelector('[name=symbol]').value,
-        interval: form.querySelector('[name=interval]').value,
-        from_ms: form.querySelector('[name=from]').value,
-        to_ms: form.querySelector('[name=to]').value,
-        ds: form.querySelector('[name=ds]').value,
-        n: Number(form.querySelector('[name=n]').value),
-      };
-    }
+    state.filters = {
+      symbol: doc.querySelector('[name=symbol]')?.value,
+      interval: doc.querySelector('[name=interval]')?.value,
+      from_ms: doc.querySelector('[name=from]')?.value,
+      to_ms: doc.querySelector('[name=to]')?.value,
+      ds: doc.querySelector('[name=ds]')?.value,
+      n: Number(doc.querySelector('[name=n]')?.value),
+    };
     persistFilters(state.filters);
-    fetchBaseline(doc);
-  });
-  const resetBtn = doc.querySelector('[data-reset]');
-  if (resetBtn) resetBtn.addEventListener('click', () => {
-    if (form) {
-      form.querySelector('[name=symbol]').value = 'SOLUSDT';
-      form.querySelector('[name=interval]').value = '1m';
-      form.querySelector('[name=from]').value = '';
-      form.querySelector('[name=to]').value = '';
-      form.querySelector('[name=ds]').value = 'lttb';
-      form.querySelector('[name=n]').value = '1000';
-    }
-    state.filters = defaultFilters();
-    persistFilters(state.filters);
-    updateCsvLink(doc);
     fetchBaseline(doc);
   });
   const btBtn = doc.querySelector('[data-backtest-quick]');
