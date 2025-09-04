@@ -28,6 +28,7 @@ async function mount(){
   global.fetch = jest.fn()
     .mockResolvedValueOnce(json({ equity:[{ts:1,equity:100}], links:{} }))
     .mockResolvedValueOnce(json([]))
+    .mockResolvedValueOnce(json({}))
     .mockResolvedValue(json({ equity:[{ts:1,equity:101}], links:{} }));
   const Analytics = await import('../../client/public/assets/analytics.js');
   Analytics.init(document);

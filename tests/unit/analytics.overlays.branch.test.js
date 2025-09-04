@@ -45,6 +45,7 @@ describe('analytics overlays extra branches', () => {
       if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
       if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse([]));
       if (url === '/analytics/job/1/equity') return Promise.resolve(createJsonResponse(overlay));
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
       return Promise.reject('unknown');
     });
     const mod = await import('../../client/public/assets/analytics.js');
@@ -56,10 +57,10 @@ describe('analytics overlays extra branches', () => {
     expect(chart.data.datasets.length).toBe(2);
     // duplicate overlay
     await mod.fetchOverlay(1, 'job-1', document);
-    expect(chart.data.datasets.filter(d=>d.id==='overlay-1').length).toBe(1);
+    expect(chart.data.datasets.filter(d=>d.id==='overlay:1').length).toBe(1);
     // remove
     mod.removeOverlay(1);
-    expect(chart.data.datasets.find(d=>d.id==='overlay-1')).toBeUndefined();
+    expect(chart.data.datasets.find(d=>d.id==='overlay:1')).toBeUndefined();
   });
 
   test('fetchOverlay errors and bad payload', async () => {
@@ -74,6 +75,7 @@ describe('analytics overlays extra branches', () => {
         calls++; if (calls===1) return Promise.resolve(new Response('',{status:404}));
         return Promise.resolve(createJsonResponse({ equity:null }));
       }
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
       return Promise.reject('u');
     });
     const mod = await import('../../client/public/assets/analytics.js');
@@ -98,12 +100,15 @@ describe('analytics overlays extra branches', () => {
       if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
       if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse([]));
       if (url === '/analytics/job/3/equity') return Promise.resolve(createJsonResponse(overlay));
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
       return Promise.reject('u');
     });
     const mod = await import('../../client/public/assets/analytics.js');
     mod.init(document);
     await flush();
     await mod.fetchOverlay(3, 'job-3', document);
+    const host = document.querySelector('[data-overlays-list]');
+    host.innerHTML = '<div><input type="checkbox" data-job-id="3" checked></div>';
     document.querySelector('[name=from]').value = '10';
     document.querySelector('[name=to]').value = '20';
     document.querySelector('[data-apply]').click();
@@ -120,6 +125,7 @@ describe('analytics overlays extra branches', () => {
     global.fetch = jest.fn(url => {
       if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
       if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse([]));
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
       return Promise.reject('u');
     });
     const mod = await import('../../client/public/assets/analytics.js');

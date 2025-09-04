@@ -13,7 +13,7 @@
 <div id="app-breadcrumbs"></div>
 <div id="toasts"></div>
 <main class="container">
-  <fieldset class="filters">
+  <form id="filtersForm" class="filters">
     <label>Symbol <input name="symbol" list="symbols" value="SOLUSDT"></label>
     <datalist id="symbols"><option value="SOLUSDT"></option></datalist>
     <label>Interval
@@ -37,30 +37,32 @@
     <label>N <input name="n" type="number" value="1000"></label>
     <button type="button" data-apply>Apply</button>
     <button type="button" data-reset>Reset</button>
-  </fieldset>
+  </form>
 
-  <section class="card" id="equity-card">
+  <section class="card" id="equityCard">
     <h2>Equity (Baseline + Overlays)</h2>
-    <canvas data-equity></canvas>
+    <canvas id="equityChart" data-equity></canvas>
   </section>
 
-  <section class="card" id="overlays-card">
+  <section class="card" id="overlaysCard">
     <h2>Overlays</h2>
-    <div class="overlays-list" data-overlays-list></div>
-    <a data-export-csv href="#">Export Overlays CSV</a>
+    <div id="overlaysList" class="overlays-list" data-overlays-list></div>
+    <a id="csvExport" data-export-csv href="#">Export Overlays CSV</a>
   </section>
 
-  <section class="card" id="jobs-card">
+  <section class="card" id="jobsCard">
     <h2>Jobs</h2>
     <button type="button" data-jobs-refresh>Refresh</button>
-    <table data-jobs-table>
-      <thead><tr><th>id</th><th>type</th><th>symbol</th><th>strategy</th><th>status</th><th>artifacts</th></tr></thead>
+    <label><input type="checkbox" data-jobs-auto> Auto refresh</label>
+    <button type="button" data-backtest-quick>Backtest (quick)</button>
+    <table id="jobsTable" data-jobs-table>
+      <thead><tr><th>id</th><th>type</th><th>symbol</th><th>strategy</th><th>status</th><th>created</th><th>artifacts</th></tr></thead>
       <tbody></tbody>
     </table>
   </section>
 
-  <section class="card" id="stats-card">
-    <h2>Stats/Portfolio</h2>
+  <section class="card" id="portfolioCard">
+    <h2>Portfolio</h2>
     <div data-portfolio></div>
   </section>
 </main>
