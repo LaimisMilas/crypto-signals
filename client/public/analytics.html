@@ -11,7 +11,7 @@
 <body data-page="Analytics">
 <div id="app-nav"></div>
 <div id="app-breadcrumbs"></div>
-<div id="toasts"></div>
+<div id="toasts" aria-live="polite"></div>
 <main class="container">
   <form id="filtersForm" class="filters">
     <label>Symbol <input name="symbol" list="symbols" value="SOLUSDT"></label>
@@ -40,14 +40,14 @@
   </form>
 
   <section class="card" id="equityCard">
-    <h2>Equity (Baseline + Overlays)</h2>
+    <h2 tabindex="-1">Equity (Baseline + Overlays)</h2>
     <canvas id="equityChart" data-equity></canvas>
   </section>
 
   <section class="card" id="overlaysCard">
     <h2>Overlays</h2>
     <div id="overlaysList" class="overlays-list" data-overlays-list></div>
-    <a id="csvExport" data-export-csv href="#">Export Overlays CSV</a>
+    <a id="csvExport" class="is-disabled" data-export-csv href="#">Export Overlays CSV</a>
   </section>
 
   <section class="card" id="jobsCard">

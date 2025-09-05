@@ -31,11 +31,13 @@ if (ChartLib?.register && ChartLib.registerables) {
     if (ds)    ds.value    = 'lttb';
     if (n)     n.value     = n.getAttribute('data-default') || '1000';
 
-    // Atnaujinti CSV nuorodą, jei turime helperį
+    // Atnaujinti CSV nuorodą ir fokusą
     if (typeof window.updateCsvLink === 'function') {
       const ids = (typeof window.getActiveOverlayIds === 'function') ? window.getActiveOverlayIds() : [];
       window.updateCsvLink(ids, { from_ms: '', to_ms: '' });
     }
+    const heading = document.querySelector('#equityCard h2');
+    if (heading) { heading.setAttribute('tabindex','-1'); heading.focus(); }
   });
 })();
 
@@ -78,7 +80,7 @@ function debounce(fn, ms) {
 function setLoading(key, val, doc = document) {
   const ids = { equity: 'equityCard', jobs: 'jobsCard', portfolio: 'portfolioCard' };
   const el = doc.getElementById(ids[key]);
-  if (el) el.classList.toggle('loading', val);
+  if (el) el.classList.toggle('is-loading', val);
 }
 
 export function initEquityChart(ctx) {
@@ -188,10 +190,10 @@ export async function fetchBaseline(doc = document) {
     const links = data.links || {};
     if (eqLink) eqLink.href = links.equity || '#';
     if (trLink) trLink.href = links.trades || '#';
-    updateCsvLink(doc);
+    updateCsvLink();
     await fetchPortfolio(doc);
   } catch (e) {
-    showToast(`Failed to load baseline ${e.message || ''}`.trim(), { type: 'error', doc });
+    showToast(e.message, { type: 'error', doc });
   } finally {
     setLoading('equity', false, doc);
   }
@@ -203,21 +205,21 @@ export async function fetchOverlay(id, label, doc = document) {
     const series = Array.isArray(data) ? normalizeEquity(data) : normalizeEquity(data?.equity);
     if (!series.length && !Array.isArray(data)) throw new Error('Bad equity data');
     upsertOverlay(id, series, label);
-    updateCsvLink(doc);
+    updateCsvLink();
   } catch (e) {
-    showToast(`Failed to load overlay ${e.message || ''}`.trim(), { type: 'error', doc });
+    showToast(e.message, { type: 'error', doc });
   }
 }
 
-export async function fetchJobs(doc = document) {
+export async function listJobs(doc = document) {
   setLoading('jobs', true, doc);
   try {
     const data = await fetchJSON('/analytics/jobs?limit=20');
     renderJobsTable(data.jobs || data, doc);
     renderOverlayList(data.jobs || data, doc);
-    updateCsvLink(doc);
+    updateCsvLink();
   } catch (e) {
-    showToast(`Failed to load jobs ${e.message || ''}`.trim(), { type: 'error', doc });
+    showToast(e.message, { type: 'error', doc });
   } finally {
     setLoading('jobs', false, doc);
   }
@@ -229,10 +231,20 @@ export async function fetchPortfolio(doc = document) {
     const q = new URLSearchParams({ symbol: state.filters.symbol });
     if (state.filters.from_ms) q.set('from_ms', state.filters.from_ms);
     if (state.filters.to_ms) q.set('to_ms', state.filters.to_ms);
-    const data = await fetchJSON(`/portfolio?${q.toString()}`);
-    renderPortfolio(data, doc);
+    const url = `/portfolio?${q.toString()}`;
+    const r = await fetch(url);
+    if (r.status === 204) {
+      renderPortfolio(null, doc);
+    } else if (r.ok) {
+      let data = null;
+      try { data = await r.json(); } catch {}
+      renderPortfolio(data, doc);
+    } else {
+      let msg = ''; try { msg = (await r.json())?.message || ''; } catch {}
+      throw new Error(`${url} [${r.status}] ${msg}`.trim());
+    }
   } catch (e) {
-    showToast(`Failed to load portfolio ${e.message || ''}`.trim(), { type: 'error', doc });
+    showToast(e.message, { type: 'error', doc });
   } finally {
     setLoading('portfolio', false, doc);
   }
@@ -242,7 +254,11 @@ function renderPortfolio(data, doc) {
   const host = doc.querySelector('[data-portfolio]');
   if (!host) return;
   host.innerHTML = '';
-  if (Array.isArray(data?.holdings)) {
+  if (!data || (!data.holdings && !data.allocation && !data.risk)) {
+    host.textContent = 'No portfolio data';
+    return;
+  }
+  if (Array.isArray(data.holdings) && data.holdings.length) {
     const table = doc.createElement('table');
     table.className = 'mini';
     table.innerHTML = '<thead><tr><th>asset</th><th>amount</th><th>value</th></tr></thead>';
@@ -255,19 +271,29 @@ function renderPortfolio(data, doc) {
     table.appendChild(tbody);
     host.appendChild(table);
   }
-  if (data?.allocation !== undefined) {
-    const p = doc.createElement('p');
-    p.textContent = `Allocation: ${data.allocation}`;
-    host.appendChild(p);
-  }
-  if (data?.risk) {
-    const ul = doc.createElement('ul');
-    Object.entries(data.risk).forEach(([k, v]) => {
-      const li = doc.createElement('li');
-      li.textContent = `${k}: ${v}`;
-      ul.appendChild(li);
+  if (data.allocation && typeof data.allocation === 'object' && Object.keys(data.allocation).length) {
+    const table = doc.createElement('table');
+    table.className = 'mini';
+    table.innerHTML = '<thead><tr><th>asset</th><th>%</th></tr></thead>';
+    const tbody = doc.createElement('tbody');
+    Object.entries(data.allocation).forEach(([asset, pct]) => {
+      const tr = doc.createElement('tr');
+      tr.innerHTML = `<td>${asset}</td><td>${pct}</td>`;
+      tbody.appendChild(tr);
     });
-    host.appendChild(ul);
+    table.appendChild(tbody);
+    host.appendChild(table);
+  }
+  if (data.risk && typeof data.risk === 'object') {
+    const ul = doc.createElement('ul');
+    ['maxDrawdown', 'vol', 'VaR'].forEach(k => {
+      if (data.risk[k] != null) {
+        const li = doc.createElement('li');
+        li.textContent = `${k}: ${data.risk[k]}`;
+        ul.appendChild(li);
+      }
+    });
+    if (ul.children.length) host.appendChild(ul);
   }
 }
 
@@ -276,17 +302,15 @@ function renderOverlayList(list, doc) {
   if (!host) return;
   host.innerHTML = '';
   list.forEach(job => {
-    const wrap = doc.createElement('div');
+    const label = doc.createElement('label');
     const cb = doc.createElement('input');
     cb.type = 'checkbox';
-    cb.dataset.jobId = job.id;
+    cb.dataset.overlayId = job.id;
     cb.checked = state.overlays.has(String(job.id));
     cb.addEventListener('change', () => handleOverlayToggle(job, doc));
-    wrap.appendChild(cb);
-    const label = doc.createElement('span');
-    label.textContent = overlayLabel(job);
-    wrap.appendChild(label);
-    host.appendChild(wrap);
+    label.appendChild(cb);
+    label.appendChild(doc.createTextNode(` ${overlayLabel(job)}`));
+    host.appendChild(label);
   });
 }
 
@@ -297,7 +321,11 @@ function renderJobsTable(list, doc) {
   list.forEach(job => {
     const tr = doc.createElement('tr');
     const created = job.created_at ? new Date(job.created_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '';
-    tr.innerHTML = `<td>${job.id}</td><td>${job.type || ''}</td><td>${job.symbol || ''}</td><td>${job.strategy || ''}</td><td>${job.status || ''}</td><td>${created}</td><td>${(job.artifacts||[]).map(a=>`<a href="${a.url}">${a.name||'dl'}</a>`).join(', ')}</td>`;
+    const arts = (job.artifacts || []).map(a => {
+      const name = a.name || (a.url ? a.url.split('/').pop() : 'file');
+      return `<a href="${a.url}" download>${name}</a>`;
+    }).join(', ');
+    tr.innerHTML = `<td>${job.id}</td><td>${job.type || ''}</td><td>${job.symbol || ''}</td><td>${job.strategy || ''}</td><td>${job.status || ''}</td><td>${created}</td><td>${arts}</td>`;
     tr.addEventListener('mouseenter', () => prefetchEquity(job.id));
     tr.addEventListener('mouseleave', () => prefetchController?.abort());
     tbody.appendChild(tr);
@@ -305,23 +333,26 @@ function renderJobsTable(list, doc) {
 }
 
 export function getActiveOverlayIds(doc = document) {
-  return Array.from(doc.querySelectorAll('[data-overlays-list] input[type=checkbox]:checked')).map(cb => cb.dataset.jobId);
+  const ids = [];
+  doc.querySelectorAll('[data-overlays-list] input[type=checkbox]:checked').forEach(cb => {
+    const id = cb.dataset.overlayId;
+    if (id && !ids.includes(id)) ids.push(id);
+  });
+  return ids;
 }
 
-export function updateCsvLink(idsOrDoc = document, range) {
-  if (Array.isArray(idsOrDoc)) {
-    const link = document.querySelector('[data-export-csv]');
-    if (!link) return;
-    const from = range?.from_ms ?? state.filters.from_ms;
-    const to = range?.to_ms ?? state.filters.to_ms;
-    link.href = composeCsvUrl(idsOrDoc, { from_ms: from, to_ms: to });
-    return;
-  }
-  const doc = idsOrDoc || document;
+export function updateCsvLink(ids, range, doc = document) {
+  const active = ids ?? getActiveOverlayIds(doc);
   const link = doc.querySelector('[data-export-csv]');
   if (!link) return;
-  const ids = getActiveOverlayIds(doc);
-  link.href = composeCsvUrl(ids, { from_ms: state.filters.from_ms, to_ms: state.filters.to_ms });
+  let from = range?.from_ms;
+  let to = range?.to_ms;
+  if (!range) {
+    from = doc.querySelector('input[name="from"]')?.value || '';
+    to = doc.querySelector('input[name="to"]')?.value || '';
+  }
+  link.href = composeCsvUrl(active, { from_ms: from, to_ms: to });
+  link.classList.toggle('is-disabled', active.length === 0);
 }
 
 if (typeof window !== 'undefined') {
@@ -331,11 +362,13 @@ if (typeof window !== 'undefined') {
 
 export async function handleOverlayToggle(job, doc = document) {
   const id = job.id ?? job;
+  const ids = getActiveOverlayIds(doc);
   if (state.overlays.has(String(id))) {
     removeOverlay(id);
-    updateCsvLink(doc);
+    updateCsvLink(ids);
     return;
   }
+  updateCsvLink(ids);
   await fetchOverlay(id, overlayLabel(job), doc);
 }
 
@@ -363,19 +396,25 @@ export function init(doc = document) {
         n: Number(form.querySelector('[name=n]').value),
       };
       persistDebounced();
-      updateCsvLink(doc);
+      updateCsvLink();
     });
   }
   fetchBaseline(doc);
-  fetchJobs(doc);
+  listJobs(doc);
   const refreshBtn = doc.querySelector('[data-jobs-refresh]');
-  if (refreshBtn) refreshBtn.addEventListener('click', () => fetchJobs(doc));
+  if (refreshBtn) refreshBtn.addEventListener('click', () => listJobs(doc));
   const autoChk = doc.querySelector('[data-jobs-auto]');
+  const startAuto = () => { state.timers.jobs = setInterval(() => listJobs(doc), 30000); };
+  const stopAuto = () => { clearInterval(state.timers.jobs); state.timers.jobs = null; };
   if (autoChk) autoChk.addEventListener('change', () => {
-    if (autoChk.checked) {
-      state.timers.jobs = setInterval(() => fetchJobs(doc), 30000);
+    if (autoChk.checked) startAuto(); else stopAuto();
+  });
+  doc.addEventListener('visibilitychange', () => {
+    if (doc.hidden) {
+      stopAuto();
     } else {
-      clearInterval(state.timers.jobs); state.timers.jobs = null;
+      listJobs(doc);
+      if (autoChk?.checked) startAuto();
     }
   });
   const applyBtn = doc.querySelector('[data-apply]');
@@ -390,6 +429,9 @@ export function init(doc = document) {
     };
     persistFilters(state.filters);
     fetchBaseline(doc);
+    updateCsvLink();
+    const heading = doc.querySelector('#equityCard h2');
+    if (heading) { heading.setAttribute('tabindex','-1'); heading.focus(); }
   });
   const btBtn = doc.querySelector('[data-backtest-quick]');
   if (btBtn) btBtn.addEventListener('click', async () => {
@@ -401,7 +443,7 @@ export function init(doc = document) {
         throw new Error(`/jobs/backtest [${r.status}] ${msg}`.trim());
       }
       showToast('Backtest started', { doc });
-      fetchJobs(doc);
+      listJobs(doc);
     } catch (e) {
       showToast(`Backtest failed ${e.message || ''}`.trim(), { type: 'error', doc });
     }

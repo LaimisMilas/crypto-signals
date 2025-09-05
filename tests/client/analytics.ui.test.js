@@ -108,10 +108,14 @@ describe('analytics ui', () => {
     const chart = mod.getChart();
     expect(chart.data.datasets.length).toBe(2);
     expect(chart.data.datasets[1].label).toBe('Overlay: 7');
+    expect(document.querySelector('[data-export-csv]').getAttribute('href')).toContain('ids=7');
+    expect(document.querySelector('[data-export-csv]').classList.contains('is-disabled')).toBe(false);
     cb.checked = false; cb.dispatchEvent(new Event('change'));
     await flush();
     expect(chart.data.datasets.length).toBe(1);
     expect(chart.data.datasets[0].label).toBe('Baseline');
+    expect(document.querySelector('[data-export-csv]').getAttribute('href')).toBe('#');
+    expect(document.querySelector('[data-export-csv]').classList.contains('is-disabled')).toBe(true);
   });
 
   test('error 500 shows toast', async () => {
@@ -124,7 +128,9 @@ describe('analytics ui', () => {
     const mod = await import('../../client/public/assets/analytics.js');
     mod.init(document);
     await flush();
-    expect(document.querySelector('.toast.error').textContent).toMatch(/Failed to load baseline/);
+    const msg = document.querySelector('.toast.error').textContent;
+    expect(msg).toContain('/analytics?baseline=live');
+    expect(msg).toContain('[500]');
   });
 
   test('empty data handled', async () => {
@@ -204,5 +210,56 @@ describe('analytics ui', () => {
     await mod.fetchOverlay(7, 'Overlay: 7', document);
     const chart = mod.getChart();
     expect(chart.data.datasets.filter(d=>d.id.startsWith('overlay')).length).toBe(1);
+  });
+
+  test('jobs auto-refresh stops hidden and resumes', async () => {
+    jest.useFakeTimers();
+    setupDom();
+    const baseline = { equity:[], links:{} };
+    let jobsCalls = 0;
+    global.fetch = jest.fn(url => {
+      if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
+      if (url.startsWith('/analytics/jobs')) { jobsCalls++; return Promise.resolve(createJsonResponse([])); }
+      if (url.startsWith('/portfolio')) return Promise.resolve(createJsonResponse({}));
+      return Promise.reject('u');
+    });
+    jest.resetModules();
+    const mod = await import('../../client/public/assets/analytics.js');
+    mod.init(document);
+    await Promise.resolve();
+    const auto = document.querySelector('[data-jobs-auto]');
+    auto.checked = true; auto.dispatchEvent(new Event('change'));
+    jest.advanceTimersByTime(30000);
+    await Promise.resolve();
+    const beforeHide = jobsCalls;
+    Object.defineProperty(document, 'hidden', { configurable:true, value:true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    jest.advanceTimersByTime(60000);
+    await Promise.resolve();
+    expect(jobsCalls).toBe(beforeHide);
+    Object.defineProperty(document, 'hidden', { configurable:true, value:false });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await Promise.resolve();
+    const afterShow = jobsCalls;
+    jest.advanceTimersByTime(30000);
+    await Promise.resolve();
+    expect(jobsCalls).toBe(afterShow + 1);
+    jest.useRealTimers();
+  });
+
+  test('portfolio fallback when empty', async () => {
+    setupDom();
+    const baseline = { equity:[], links:{} };
+    global.fetch = jest.fn(url => {
+      if (url.startsWith('/analytics?baseline=live')) return Promise.resolve(createJsonResponse(baseline));
+      if (url.startsWith('/analytics/jobs')) return Promise.resolve(createJsonResponse([]));
+      if (url.startsWith('/portfolio')) return Promise.resolve(new Response('', { status:204 }));
+      return Promise.reject('u');
+    });
+    jest.resetModules();
+    const mod = await import('../../client/public/assets/analytics.js');
+    mod.init(document);
+    await flush();
+    expect(document.querySelector('[data-portfolio]').textContent).toBe('No portfolio data');
   });
 });

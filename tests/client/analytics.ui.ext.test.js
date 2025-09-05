@@ -90,10 +90,10 @@ describe('analytics ui ext', () => {
     document.querySelector('[data-apply]').click();
     await flush();
     const host = document.querySelector('[data-overlays-list]');
-    host.innerHTML = '<div><input type="checkbox" data-job-id="7" checked></div><div><input type="checkbox" data-job-id="8" checked></div>';
+    host.innerHTML = '<label><input type="checkbox" data-overlay-id="7" checked></label><label><input type="checkbox" data-overlay-id="8" checked></label>';
     mod.upsertOverlay('7', [{ ts:1, equity:2 }], 'A');
     mod.upsertOverlay('8', [{ ts:1, equity:3 }], 'B');
-    mod.updateCsvLink(document);
+    mod.updateCsvLink();
     const href = document.querySelector('[data-export-csv]').getAttribute('href');
     const expected = helpers.composeCsvUrl(['7','8'], { from_ms:'1', to_ms:'2' });
     expect(href).toBe(expected);
