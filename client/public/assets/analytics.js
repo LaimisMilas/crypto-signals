@@ -411,3 +411,76 @@ export function init(doc = document) {
 if (typeof window !== 'undefined' && !window.__DISABLE_AUTO_INIT__) {
   window.addEventListener('DOMContentLoaded', () => init());
 }
+// --- PATCH: robust CSV link + reset updates state.filters ---
+
+// Perrašo updateCsvLink: jei range nepaduota, ima iš formos (from/to)
+window.updateCsvLink = function(idsOrDoc = document, range){
+  try{
+    const doc = Array.isArray(idsOrDoc) ? document : (idsOrDoc || document);
+    const link = doc.querySelector('[data-export-csv]');
+    if (!link) return;
+
+    // overlay ids
+    const ids = Array.isArray(idsOrDoc) ? idsOrDoc : (typeof window.getActiveOverlayIds === 'function' ? window.getActiveOverlayIds(doc) : []);
+
+    // range: pirmiausia iš parametrų, kitaip iš formos
+    const fromEl = doc.querySelector('input[name="from"]');
+    const toEl   = doc.querySelector('input[name="to"]');
+    const from_ms = (range && range.from_ms != null) ? range.from_ms : (fromEl ? fromEl.value : '');
+    const to_ms   = (range && range.to_ms   != null) ? range.to_ms   : (toEl   ? toEl.value   : '');
+
+    // atnaujinkim state.filters jei turim
+    if (window.state) {
+      window.state.filters = {
+        ...(window.state.filters||{}),
+        from_ms: from_ms,
+        to_ms: to_ms,
+      };
+    }
+
+    // composeCsvUrl gali būti helpers'e ar global'e
+    const helpers = window.analyticsHelpers || window.helpers || {};
+    const composeCsvUrl = helpers.composeCsvUrl || ((ids2, rng) => {
+      const p = new URLSearchParams();
+      if (ids2 && ids2.length) p.set('ids', ids2.join(','));
+      if (rng && rng.from_ms != null && String(rng.from_ms).length) p.set('from_ms', String(rng.from_ms));
+      if (rng && rng.to_ms   != null && String(rng.to_ms).length)   p.set('to_ms',   String(rng.to_ms));
+      const qs = p.toString();
+      return `/analytics/overlays.csv${qs ? `?${qs}` : ''}`;
+    });
+
+    link.setAttribute('href', composeCsvUrl(ids||[], { from_ms, to_ms }));
+  }catch(e){}
+};
+
+// Papildomas reset listener'is: išvalo VISUS [name=strategy] ir atnaujina state.filters
+(function(){
+  const btn = document.querySelector('[data-reset]');
+  if (!btn || btn.__patch2) return;
+  btn.__patch2 = true;
+  btn.addEventListener('click', ()=>{
+    const doc = document;
+    // clear ALL strategy fields (input/select)
+    doc.querySelectorAll('[name="strategy"]').forEach(el => { try{ el.value = ''; }catch(_){}; });
+
+    // sync state.filters su formos reikšmėmis po reset
+    if (window.state) {
+      const from = doc.querySelector('input[name="from"]');
+      const to   = doc.querySelector('input[name="to"]');
+      const ds   = doc.querySelector('select[name="ds"]');
+      const n    = doc.querySelector('input[name="n"]');
+      window.state.filters = {
+        ...(window.state.filters||{}),
+        from_ms: from ? '' : '',
+        to_ms: to ? '' : '',
+        ds: ds ? ds.value : 'lttb',
+        n: n ? Number(n.value || 1000) : 1000,
+      };
+    }
+
+    // atnaujinti CSV nuorodą pagal tuščius range
+    if (typeof window.updateCsvLink === 'function') {
+      window.updateCsvLink(document, { from_ms: '', to_ms: '' });
+    }
+  });
+})();
