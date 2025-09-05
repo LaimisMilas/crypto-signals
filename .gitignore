@@ -28,14 +28,13 @@ client/dist/
 
 # E2E screenshots
 tests/e2e/__screenshots__/
-deploy/pgdata/*
+deploy/pgdata/
 
 # Test coverage (client)
 coverage-client/
 coverage/
 
 # Build output
-client/dist/
 public/
 
 # Playwright cache/artifacts
