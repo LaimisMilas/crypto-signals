@@ -16,16 +16,18 @@ describe('analytics.updateCsvLink fallback branches', () => {
     global.fetch = jest.fn(() => Promise.resolve(json({ equity:[], links:{} })));
     const Analytics = await import('../../client/public/assets/analytics.js');
     Analytics.init(document);
-    expect(() => Analytics.updateCsvLink(document)).not.toThrow();
+    expect(() => Analytics.updateCsvLink()).not.toThrow();
   });
 
-  test('tušti overlay ids → href "#"', async () => {
+  test('tušti overlay ids → href "#" ir .is-disabled', async () => {
     document.body.innerHTML = `<a data-export-csv href="#"></a><canvas data-equity></canvas>`;
     global.fetch = jest.fn(() => Promise.resolve(json({ equity:[], links:{} })));
     const Analytics = await import('../../client/public/assets/analytics.js');
     Analytics.init(document);
-    Analytics.updateCsvLink(document);
-    expect(document.querySelector('[data-export-csv]').getAttribute('href')).toBe('#');
+    Analytics.updateCsvLink([]);
+    const link = document.querySelector('[data-export-csv]');
+    expect(link.getAttribute('href')).toBe('#');
+    expect(link.classList.contains('is-disabled')).toBe(true);
   });
 });
 
