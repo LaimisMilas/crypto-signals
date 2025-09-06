@@ -12,7 +12,8 @@
 - Job scripts cover backtesting, optimization, signal generation and live trading.
 - Metrics endpoint and health checks enable runtime monitoring.
 - Stripe webhook endpoint supports subscription checkout.
-- GAPS: authentication, detailed data model docs and client production readiness.
+- JWT auth protects live trading, risk and job management endpoints.
+- GAPS: detailed data model docs and client production readiness.
 
 ## Architecture overview
 - Express server (`src/server.js`) as core service.
@@ -73,7 +74,7 @@
 ## Security & compliance
 - Secrets injected via `.env` and `deploy/.env.example` (API keys, tokens, database creds).
 - Caddy reverse proxy can provide HTTPS.
-- No authentication or authorization layers described (GAPS/TBD).
+- JWT-based authentication with shared secret protects `/live`, `/risk/*` and `/jobs/*` routes.
 - GAPS: logging of sensitive data, compliance standards, license information.
 
 ## Testing & QA
@@ -83,7 +84,6 @@
 - GAPS: test coverage thresholds and CI status for all environments.
 
 ## Backlog: Gaps & Recommendations
-- Define authentication/authorization strategy and document it.
 - Expand data model documentation and ER diagrams.
 - Clarify production deployment process and scaling.
 - Improve frontend documentation and component testing.
