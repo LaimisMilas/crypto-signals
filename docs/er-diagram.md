@@ -3,13 +3,20 @@ erDiagram
   jobs {
     string id
     string type
+    string status
+    string priority
+    string created_at
     string queued_at
     string started_at
     string finished_at
     string progress
+    string params
+    string result
+    string error
   }
   equity_snapshots {
     string ts
+    string equity
     string source
     string created_at
   }
@@ -36,6 +43,7 @@ erDiagram
     string entry_price
     string unrealized_pnl
     string mode
+    string PRIMARY
   }
   strategy_configs {
     string id
@@ -54,15 +62,20 @@ erDiagram
     string id
     string trade_id
     string side
+    string price
     string qty
     string commission
+    string commission_asset
     string is_entry
+    string ts
   }
   job_artifacts {
     string id
     string job_id
     string kind
+    string label
     string path
+    string size_bytes
     string created_at
   }
   job_logs {
@@ -70,6 +83,7 @@ erDiagram
     string job_id
     string ts
     string level
+    string msg
   }
   risk_limits {
     string id
@@ -79,6 +93,7 @@ erDiagram
   risk_state {
     string id
     string state
+    string halt_reason
     string day_start
     string equity_day_start
     string equity_day_high
@@ -89,6 +104,7 @@ erDiagram
     string id
     string ts
     string action
+    string reason
     string details
   }
   equity_history {

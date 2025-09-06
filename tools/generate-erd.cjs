@@ -6,7 +6,7 @@ let match;
 while ((match = tableRegex.exec(sql))) {
   const name = match[1];
   const colsSection = match[2];
-  const lines = colsSection.split(/,\n/).map(l => l.trim()).filter(Boolean);
+  const lines = colsSection.split(/,\s*(?:--[^\n]*)?\r?\n/).map(l => l.trim()).filter(Boolean);
   tables[name] = { cols: [], refs: [] };
   for (const line of lines) {
     const colMatch = line.match(/^("?)(\w+)\1\s+/);
@@ -34,3 +34,13 @@ for (const [t, info] of Object.entries(tables)) {
   }
 }
 fs.writeFileSync('docs/er-diagram.md', '```mermaid\n' + out + '```\n');
+
+let doc = '# Database tables\n\n';
+for (const [t, info] of Object.entries(tables)) {
+  doc += `## ${t}\n\n`;
+  for (const c of info.cols) {
+    doc += `- ${c}\n`;
+  }
+  doc += '\n';
+}
+fs.writeFileSync('docs/table-descriptions.md', doc);
