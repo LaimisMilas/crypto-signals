@@ -25,14 +25,22 @@ kompose convert -f docker-compose.yml -o k8s/
 
 This generates deployment and service manifests under the `k8s/` directory. Review and customize the output.
 
-## 3. Configure Kubernetes Resources
+## 3. Secrets Management
+
+Use a dedicated secret store to supply runtime configuration:
+
+* For Kubernetes deployments create a Secret manifest such as `k8s/secret.example.yaml` and apply it with `kubectl apply -f` after populating the base64‑encoded values.
+* HashiCorp Vault can be used in place of static secrets. A Vault Agent sidecar may write secrets to a file or inject them as environment variables.
+* Rotate secrets regularly and update the running workloads by restarting pods or using a reloader operator.
+
+## 4. Configure Kubernetes Resources
 
 * Adjust resource requests/limits for each Deployment.
-* Configure environment variables and secrets (e.g., database credentials).
+* Mount or reference secrets via `envFrom` or `secretKeyRef`.
 * Add persistent volumes for stateful components like PostgreSQL.
 * Set up Ingress or LoadBalancer services to expose HTTP endpoints.
 
-## 4. Apply Manifests
+## 5. Apply Manifests
 
 ```bash
 kubectl apply -f k8s/
@@ -44,7 +52,7 @@ Monitor rollout status:
 kubectl get pods
 ```
 
-## 5. Database Migrations
+## 6. Database Migrations
 
 Run migrations inside the cluster using a Kubernetes Job:
 
@@ -67,11 +75,11 @@ spec:
 
 Apply the job and wait for completion before starting application pods.
 
-## 6. Observability
+## 7. Observability
 
 The repository includes example Prometheus, Alertmanager, and Grafana configs under `deploy/`. Deploy these into the cluster for metrics and alerting.
 
-## 7. CI/CD
+## 8. CI/CD
 
 Automate builds and deployments with your CI system. A typical workflow:
 

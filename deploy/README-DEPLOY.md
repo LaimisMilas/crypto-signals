@@ -27,6 +27,15 @@ cp deploy/.env.example /opt/crypto-signals/.env
 nano /opt/crypto-signals/.env   # fill Stripe/Telegram vars
 ```
 
+### Secrets management
+
+Instead of editing the `.env` file manually, fetch sensitive values from a secret manager:
+
+* **HashiCorp Vault** – use `vault kv get` during deployment or run a Vault Agent to template the file.
+* **Docker secrets** – create secrets with `docker secret create` and reference them from the compose file.
+
+Rotate credentials periodically and regenerate the `.env` or secrets before redeploying.
+
 ## 3) First run
 ```bash
 cd /opt/crypto-signals

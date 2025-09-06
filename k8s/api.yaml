@@ -15,6 +15,9 @@ spec:
       containers:
         - name: api
           image: crypto-signals-api:latest
+          envFrom:
+            - secretRef:
+                name: api-secrets
           env:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://otel-collector:4318/v1/traces"
