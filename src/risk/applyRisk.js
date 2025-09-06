@@ -22,28 +22,30 @@ import { noteRiskReject } from '../signal/instrumentation.js';
 export function applyRiskAndStops(position, ctx = {}) {
   const { strategy = 'default', price } = ctx;
   const { side, sl, tp, trailPct, trailTop } = position;
-
   if (!Number.isFinite(price)) return { ok: true };
 
-  const oppHit = (lvl, cmp) => Number.isFinite(lvl) && cmp(lvl);
+  const isLong = side === 'BUY';
 
-  // Take profit check
-  if (oppHit(tp, lvl => (side === 'BUY' ? price >= lvl : price <= lvl))) {
-    noteRiskReject({ strategy, reason: 'tp_hit' });
-    return { ok: false, reason: 'tp_hit' };
+  if (Number.isFinite(tp)) {
+    const hit = isLong ? price >= tp : price <= tp;
+    if (hit) {
+      noteRiskReject({ strategy, reason: 'tp_hit' });
+      return { ok: false, reason: 'tp_hit' };
+    }
   }
 
-  // Stop loss check
-  if (oppHit(sl, lvl => (side === 'BUY' ? price <= lvl : price >= lvl))) {
-    noteRiskReject({ strategy, reason: 'sl_hit' });
-    return { ok: false, reason: 'sl_hit' };
+  if (Number.isFinite(sl)) {
+    const hit = isLong ? price <= sl : price >= sl;
+    if (hit) {
+      noteRiskReject({ strategy, reason: 'sl_hit' });
+      return { ok: false, reason: 'sl_hit' };
+    }
   }
 
-  // Trailing stop logic
   if (Number.isFinite(trailPct) && trailPct > 0) {
-    let top = trailTop ?? position.entry ?? price;
-    if (side === 'BUY') {
-      if (price > top) top = price; // move top
+    let top = Number.isFinite(trailTop) ? trailTop : (position.entry ?? price);
+    if (isLong) {
+      if (price > top) top = price;
       else if (price <= top * (1 - trailPct)) {
         noteRiskReject({ strategy, reason: 'trail_hit' });
         return { ok: false, reason: 'trail_hit', trailTop: top };

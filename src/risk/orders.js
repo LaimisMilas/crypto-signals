@@ -13,6 +13,7 @@
  * @returns {Array<Object>} Array [entryOrder, slOrder, tpOrder]
  */
 import binance from '../integrations/binance/client.js';
+import { db } from '../storage/db.js';
 
 export function buildOrders(p) {
   const {
@@ -72,6 +73,25 @@ export async function sendOrders(orders = []) {
     // POST /fapi/v1/order with signed payload
     const res = await binance.send('POST', '/fapi/v1/order', o, { signed: true });
     results.push(res);
+    try {
+      await db.query(
+        `INSERT INTO orders (binance_order_id, client_order_id, symbol, side, type, price, stop_price, qty, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          res.orderId || null,
+          res.clientOrderId || null,
+          res.symbol,
+          res.side,
+          res.type,
+          res.price ? Number(res.price) : null,
+          res.stopPrice ? Number(res.stopPrice) : null,
+          res.origQty ? Number(res.origQty) : null,
+          res.status || null,
+        ],
+      );
+    } catch {
+      // DB logging failures should not interrupt order placement
+    }
   }
   return results;
 }
