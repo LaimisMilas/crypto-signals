@@ -13,6 +13,7 @@
     "test": "cross-env TZ=UTC NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
     "test:watch": "cross-env TZ=UTC NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --watch",
     "test:cov": "cross-env TZ=UTC NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --coverage",
+    "test:integration": "cross-env TZ=UTC NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest tests/integration",
     "test:client": "cross-env TZ=UTC NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest -c jest.client.config.cjs",
     "test:cov:client": "cross-env TZ=UTC NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest -c jest.client.config.cjs --coverage",
     "test:client:quick": "cross-env TZ=UTC NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest -c jest.client.config.cjs --maxWorkers=50%",
