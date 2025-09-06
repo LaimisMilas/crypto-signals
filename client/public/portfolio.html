@@ -18,6 +18,7 @@
         <button role="tab" id="tab-risk" data-tab="risk">Risk</button>
         <button role="tab" id="tab-corr" data-tab="corr">Correlation</button>
         <button role="tab" id="tab-attr" data-tab="attr">Attribution</button>
+        <button role="tab" id="tab-eq" data-tab="eq">Equity</button>
       </div>
 
       <section role="tabpanel" id="panel-alloc" data-tab-panel="alloc" aria-labelledby="tab-alloc"
@@ -33,6 +34,10 @@
 
       <section role="tabpanel" id="panel-attr" data-tab-panel="attr" aria-labelledby="tab-attr"
         data-lazy-module="/assets/modules/portfolio/attribution.js"
+        data-lazy-vendor="/assets/vendor/chart.umd.js" hidden></section>
+
+      <section role="tabpanel" id="panel-eq" data-tab-panel="eq" aria-labelledby="tab-eq"
+        data-lazy-module="/assets/modules/live/equity.js"
         data-lazy-vendor="/assets/vendor/chart.umd.js" hidden></section>
     </div>
   </main>
