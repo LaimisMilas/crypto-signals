@@ -87,5 +87,49 @@ Automate builds and deployments with your CI system. A typical workflow:
 2. Push images to registry.
 3. Use `kubectl` or GitOps (e.g., ArgoCD) to update the cluster.
 
+## 9. HTTPS with Caddy or Nginx
+
+Terminate TLS in front of the API using a reverse proxy. Two common options are
+[Caddy](https://caddyserver.com/) and [Nginx](https://nginx.org/).
+
+### Caddy
+
+Create a `Caddyfile` similar to:
+
+```text
+{
+  email you@example.com
+}
+
+example.com {
+  encode gzip
+  reverse_proxy api:3000
+}
+```
+
+Caddy will automatically obtain and renew Let's Encrypt certificates.
+
+### Nginx
+
+Request a certificate with Certbot and configure Nginx to proxy traffic:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name example.com;
+    ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://api:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+Nginx serves encrypted traffic on port 443 while forwarding requests to the
+API service inside the cluster.
+
 ---
 For local testing, `docker-compose.yml` remains available to spin up the stack quickly.
