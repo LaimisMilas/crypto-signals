@@ -55,6 +55,7 @@ services:
       PGUSER: ${PGUSER}
       PGPASSWORD: ${PGPASSWORD}
       PGDATABASE: ${PGDATABASE}
+      PGSSLMODE: disable
     volumes:
       - ../logs:/app/logs
     depends_on:
