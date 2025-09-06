@@ -2,7 +2,18 @@ import { jest } from '@jest/globals';
 import fs from 'fs';
 import path from 'path';
 import request from 'supertest';
+import crypto from 'crypto';
 import { withTmpArtifacts } from '../helpers/tmpArtifacts.js';
+
+const SECRET = 'testsecret';
+process.env.AUTH_SECRET = SECRET;
+function sign(payload) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', SECRET).update(`${header}.${body}`).digest('base64url');
+  return `${header}.${body}.${sig}`;
+}
+const token = sign({ sub: 'test', exp: Math.floor(Date.now() / 1000) + 3600 });
 
 jest.setTimeout(15000);
 
@@ -44,24 +55,24 @@ describe('Artifacts routes', () => {
     });
 
     const appReq = request(app);
-    const list = await appReq.get('/jobs/1/artifacts');
-    expect(list.status).toBe(200);
-    expect(list.body.artifacts[0].download).toContain('/jobs/1/artifacts/5/download');
+      const list = await appReq.get('/jobs/1/artifacts').set('Authorization', `Bearer ${token}`);
+      expect(list.status).toBe(200);
+      expect(list.body.artifacts[0].download).toContain('/jobs/1/artifacts/5/download');
 
-    const head = await appReq.head('/jobs/1/artifacts/5');
-    expect(head.status).toBe(200);
-    expect(head.headers['etag']).toBeTruthy();
+      const head = await appReq.head('/jobs/1/artifacts/5').set('Authorization', `Bearer ${token}`);
+      expect(head.status).toBe(200);
+      expect(head.headers['etag']).toBeTruthy();
 
-    const raw = await appReq.get('/jobs/1/artifacts/5/raw');
-    expect(raw.status).toBe(200);
-    expect(raw.text).toContain('ts,value');
+      const raw = await appReq.get('/jobs/1/artifacts/5/raw').set('Authorization', `Bearer ${token}`);
+      expect(raw.status).toBe(200);
+      expect(raw.text).toContain('ts,value');
 
-    const range = await appReq.get('/jobs/1/artifacts/5/raw').set('Range', 'bytes=0-5');
-    expect(range.status).toBe(206);
-    expect(range.headers['content-range']).toMatch(/^bytes 0-5\/\d+/);
+      const range = await appReq.get('/jobs/1/artifacts/5/raw').set('Authorization', `Bearer ${token}`).set('Range', 'bytes=0-5');
+      expect(range.status).toBe(206);
+      expect(range.headers['content-range']).toMatch(/^bytes 0-5\/\d+/);
 
-    const dl = await appReq.get('/jobs/1/artifacts/5/download');
-    expect(dl.status).toBe(200);
-    expect(dl.headers['content-disposition']).toMatch(/attachment/);
-  }, 15000);
-});
+      const dl = await appReq.get('/jobs/1/artifacts/5/download').set('Authorization', `Bearer ${token}`);
+      expect(dl.status).toBe(200);
+      expect(dl.headers['content-disposition']).toMatch(/attachment/);
+    }, 15000);
+  });

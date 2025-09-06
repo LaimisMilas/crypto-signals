@@ -26,6 +26,7 @@ import logger from './observability/logger.js';
 import { requestId } from './middleware/request-id.js';
 import { loggerContext } from './middleware/logger-context.js';
 import { errorHandler } from './middleware/error-handler.js';
+import { auth } from './middleware/auth.js';
 import { metricsRouter, httpRequests, httpDuration } from './observability/metrics.js';
 import { sseRoutes } from './routes/sse.js';
 import analyticsOverlaysCsvRoutes from './routes/analytics.overlays.csv.js';
@@ -79,6 +80,11 @@ app.post('/webhook/stripe', bodyParser.raw({ type: 'application/json' }), stripe
 
 // JSON body for general APIs
 app.use(bodyParser.json());
+
+
+app.use('/live', auth);
+app.use('/risk', auth);
+app.use('/jobs', auth);
 
 app.use('/', liveEquityRoutes);
 // Equity routes (SSE and fetch)
