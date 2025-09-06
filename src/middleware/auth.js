@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { db } from '../storage/db.js';
 
 const SECRET = process.env.AUTH_SECRET || '';
 
@@ -29,17 +30,35 @@ function verifyToken(token, secret = SECRET) {
   return payload;
 }
 
-export function auth(req, res, next) {
+export async function auth(req, res, next) {
   if (!SECRET) return res.status(500).json({ error: 'auth_disabled' });
   const header = req.headers['authorization'] || '';
   const match = header.match(/^Bearer (.+)$/);
   if (!match) return res.status(401).json({ error: 'unauthorized' });
+  let payload;
   try {
-    const payload = verifyToken(match[1]);
-    req.user = payload;
-    next();
+    payload = verifyToken(match[1]);
   } catch {
     return res.status(401).json({ error: 'unauthorized' });
+  }
+
+  const email = (payload.email || payload.sub || '').trim().toLowerCase();
+  if (!email) return res.status(403).json({ error: 'subscription_required' });
+
+  try {
+    const { rows } = await db.query(
+      `SELECT status FROM subscribers WHERE email=$1 ORDER BY id DESC LIMIT 1`,
+      [email]
+    );
+    const status = rows[0]?.status;
+    if (!['active', 'trialing'].includes(status)) {
+      return res.status(403).json({ error: 'subscription_inactive' });
+    }
+    req.user = payload;
+    next();
+  } catch (e) {
+    console.error('auth db error:', e);
+    return res.status(500).json({ error: 'auth_db_error' });
   }
 }
 

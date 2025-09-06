@@ -85,6 +85,18 @@ async function createMinimalSchema(client) {
     CREATE INDEX IF NOT EXISTS idx_equity_snapshots_ts ON equity_snapshots(ts);
     CREATE INDEX IF NOT EXISTS idx_equity_snapshots_source_ts ON equity_snapshots(source, ts);
   `);
+
+  // subscribers table for auth middleware
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS subscribers(
+      id SERIAL PRIMARY KEY,
+      email TEXT,
+      subscription_id TEXT,
+      status TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_subs_email ON subscribers(email);
+  `);
 }
 
 async function seedBasic(client) {
@@ -112,6 +124,12 @@ async function seedBasic(client) {
     INSERT INTO equity_snapshots(ts,equity,source) VALUES
       (1000,1000,'live'),(2000,1040,'live'),(3000,1085,'live')
     ON CONFLICT (ts) DO UPDATE SET equity=EXCLUDED.equity;
+  `);
+
+  await client.query(`
+    INSERT INTO subscribers(email, status)
+    VALUES ('test', 'active')
+    ON CONFLICT DO NOTHING;
   `);
 }
 

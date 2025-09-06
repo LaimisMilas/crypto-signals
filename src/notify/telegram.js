@@ -44,9 +44,9 @@ export async function sendMessage(chatId, text, opts = {}) {
  *  - ts: number (ms)
  */
 export async function sendTradeAlert(type, payload = {}) {
-  const chatId = process.env.TELEGRAM_CHAT_ID;
+  const chatId = process.env.TELEGRAM_VIP_CHAT_ID || process.env.TELEGRAM_CHAT_ID;
   if (!chatId) {
-    console.warn('[TG] Missing TELEGRAM_CHAT_ID – alerts disabled');
+    console.warn('[TG] Missing TELEGRAM_VIP_CHAT_ID/TELEGRAM_CHAT_ID – alerts disabled');
     return { ok: false, error: 'no-chat' };
   }
 
@@ -96,6 +96,12 @@ export async function notifyPublic(text) {
 
 export async function notifyPrivate(text) {
   const chatId = process.env.TELEGRAM_PRIVATE_CHAT_ID;
+  if (!chatId) return;
+  await sendMessage(chatId, text, { parse_mode: 'Markdown' });
+}
+
+export async function notifyVip(text) {
+  const chatId = process.env.TELEGRAM_VIP_CHAT_ID;
   if (!chatId) return;
   await sendMessage(chatId, text, { parse_mode: 'Markdown' });
 }

@@ -43,8 +43,11 @@ describe('Artifacts routes', () => {
     const data = Buffer.from('ts,value\n1,100\n2,110\n3,120\n');
     fs.writeFileSync(abs, data);
 
-    db.query.mockImplementation(async (sql, params) => {
+    db.query.mockImplementation(async (sql) => {
       const s = sql.toString();
+      if (s.includes('subscribers')) {
+        return { rows: [{ status: 'active' }] };
+      }
       if (s.includes('job_artifacts') && s.includes('WHERE job_id=$1 AND id=$2')) {
         return { rows: [{ id: 5, job_id: 1, label: 'equity.csv', path: rel, size_bytes: data.length, remote_url: null }] };
       }
