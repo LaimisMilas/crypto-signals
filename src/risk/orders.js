@@ -12,6 +12,8 @@
  * @param {boolean} [p.reduceOnly=true] Whether protective orders should reduce only
  * @returns {Array<Object>} Array [entryOrder, slOrder, tpOrder]
  */
+import binance from '../integrations/binance/client.js';
+
 export function buildOrders(p) {
   const {
     side,
@@ -58,5 +60,21 @@ export function buildOrders(p) {
   return [entryOrder, slOrder, tpOrder];
 }
 
-export default { buildOrders };
+/**
+ * Send array of orders sequentially to Binance futures API.
+ *
+ * @param {Array<Object>} orders Array of order payloads
+ * @returns {Promise<Array<Object>>} array of responses
+ */
+export async function sendOrders(orders = []) {
+  const results = [];
+  for (const o of orders) {
+    // POST /fapi/v1/order with signed payload
+    const res = await binance.send('POST', '/fapi/v1/order', o, { signed: true });
+    results.push(res);
+  }
+  return results;
+}
+
+export default { buildOrders, sendOrders };
 

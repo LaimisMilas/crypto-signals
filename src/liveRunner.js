@@ -7,7 +7,7 @@ import binance from './integrations/binance/client.js';
 import { computeATR } from './risk/atr.js';
 import { computePositionSize } from './risk/sizing.js';
 import { loadExchangeFilters, roundPrice, ensureSymbolSettings } from './risk/limits.js';
-import { buildOrders } from './risk/orders.js';
+import { buildOrders, sendOrders } from './risk/orders.js';
 import { checkPreEntry } from './risk/guardrails.js';
 import { ensureDayStart, updateRealizedPnlToday } from './risk/state.js';
 import { noteSignal, noteSuppressed, noteMissingCandles, noteDataStaleness } from './signal/instrumentation.js';
@@ -144,11 +144,7 @@ export async function runOnce(liveConfig) {
               noteSignal({ strategy: strat.id, symbol, interval: cfg.interval, side });
               const orders = buildOrders({ side, entryType: 'MARKET', entryPrice, qty, sl, tp, symbol });
               try {
-                // entry first
-                await binance.send('POST', '/fapi/v1/order', orders[0], { signed: true });
-                // protective orders
-                await binance.send('POST', '/fapi/v1/order', orders[1], { signed: true });
-                await binance.send('POST', '/fapi/v1/order', orders[2], { signed: true });
+                await sendOrders(orders);
                 await openTrade(client, { ts: last.ts, side, price: entryPrice, strategyId: strat.id, params, symbol });
               } catch (e) {
                 console.error('Order error', e);
@@ -165,22 +161,51 @@ export async function runOnce(liveConfig) {
   }
 }
 
-let runnerState = { status: 'RUNNING', lastError: null };
+let runnerState = { status: 'STOPPED', lastError: null, lastRun: null };
 let activeConfig = null;
+let loopTimer = null;
+let pollMs = 60_000;
 
 export function getRunnerStatus() {
   return runnerState;
 }
 
-export async function gracefulRestart(newCfg) {
-  runnerState.status = 'RESTARTING';
+async function loop() {
+  if (runnerState.status !== 'RUNNING') return;
   try {
-    // Placeholder for stopping ongoing loops / timers
-    activeConfig = newCfg;
+    await runOnce(activeConfig);
+    runnerState.lastRun = Date.now();
+    runnerState.lastError = null;
   } catch (e) {
     runnerState.lastError = String(e);
-  } finally {
-    runnerState.status = 'RUNNING';
+  }
+  if (runnerState.status === 'RUNNING') {
+    loopTimer = setTimeout(loop, pollMs);
+  }
+}
+
+export function startRunner(cfg) {
+  activeConfig = cfg;
+  pollMs = Number(cfg?.pollMs || pollMs);
+  if (loopTimer) clearTimeout(loopTimer);
+  runnerState.status = 'RUNNING';
+  loop();
+}
+
+export function stopRunner() {
+  runnerState.status = 'STOPPED';
+  activeConfig = null;
+  if (loopTimer) {
+    clearTimeout(loopTimer);
+    loopTimer = null;
+  }
+}
+
+export async function gracefulRestart(newCfg) {
+  activeConfig = newCfg;
+  if (runnerState.status === 'RUNNING') {
+    if (loopTimer) clearTimeout(loopTimer);
+    loop();
   }
 }
 

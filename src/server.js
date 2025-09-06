@@ -17,6 +17,7 @@ import { portfolioRoutes } from './routes/portfolio.js';
 import { riskRoutes } from './routes/risk.js';
 import { getStrategies } from './strategies/index.js';
 import { configRoutes } from './routes/config.js';
+import { autoRoutes } from './routes/auto.js';
 import binanceRoutes from './integrations/binance/routes.js';
 import { healthRoutes } from './routes/health.js';
 import analyticsJobsRoutes from './routes/analytics.jobs.js';
@@ -93,6 +94,7 @@ userStreamRoutes(app);
 portfolioRoutes(app);
 riskRoutes(app);
 configRoutes(app);
+autoRoutes(app);
 jobRunner.start();
 
 app.post('/jobs/backtest', async (req, res) => {
