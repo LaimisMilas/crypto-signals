@@ -9,7 +9,7 @@ import {
 } from '../metrics-signal.js';
 
 const NUMERIC_INDICATORS = new Set(['rsi14', 'atr14', 'ai_score', 'adx14', 'ema', 'sma']);
-const CATEGORICAL_INDICATORS = new Set(['trend', 'bullish_engulfing', 'bearish_engulfing', 'pattern']);
+const CATEGORICAL_INDICATORS = new Set(['trend', 'bullish_engulfing', 'bearish_engulfing', 'pattern', 'doji', 'support_resistance']);
 
 function isValidByType(indicator, raw) {
   if (raw == null) return false;
