@@ -38,15 +38,28 @@ export function overlayLabel(jobOrId) {
 }
 
 export function composeCsvUrl(ids = [], range = {}) {
-  if (!ids || ids.length === 0) return '#';
+  const toArray = (v) => {
+    if (Array.isArray(v)) return v;
+    if (v == null) return [];
+    if (typeof v === 'string') return v ? v.split(',') : [];
+    if (typeof v === 'object') {
+      if (v && (v.nodeType === 1 || v.nodeType === 9)) return []; // element/document
+      if (typeof v[Symbol.iterator] === 'function') return Array.from(v);
+      if (typeof v.length === 'number') { try { return Array.from(v); } catch { return []; } }
+    }
+    return [String(v)];
+  };
+  const arr = toArray(ids).map(String).filter(Boolean);
+  if (arr.length === 0) return '#';
+
   const params = new URLSearchParams();
-  params.set('ids', ids.join(','));
-  if (range.from_ms != null && String(range.from_ms).length) {
-    params.set('from_ms', String(range.from_ms));
-  }
-  if (range.to_ms != null && String(range.to_ms).length) {
-    params.set('to_ms', String(range.to_ms));
-  }
-  const qs = params.toString();
-  return `/analytics/overlays.csv${qs ? `?${qs}` : ''}`;
+  params.set('ids', arr.join(','));
+
+  const from = (range && range.from_ms != null && String(range.from_ms).length) ? String(range.from_ms) : '';
+  const to = (range && range.to_ms != null && String(range.to_ms).length) ? String(range.to_ms) : '';
+  if (from) params.set('from_ms', from);
+  if (to) params.set('to_ms', to);
+
+  return `/analytics/overlays.csv?${params.toString()}`;
 }
+

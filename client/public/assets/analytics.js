@@ -341,19 +341,121 @@ export function getActiveOverlayIds(doc = document) {
   return ids;
 }
 
-export function updateCsvLink(ids, range, doc = document) {
-  const active = ids ?? getActiveOverlayIds(doc);
-  const link = doc.querySelector('[data-export-csv]');
+
+
+export function updateCsvLink(idsOrDoc = document, range) {
+  const link = document.querySelector('[data-export-csv]');
   if (!link) return;
-  let from = range?.from_ms;
-  let to = range?.to_ms;
-  if (!range) {
-    from = doc.querySelector('input[name="from"]')?.value || '';
-    to = doc.querySelector('input[name="to"]')?.value || '';
+
+  const enable = (href) => { link.href = href; if (href === '#') link.classList.add('is-disabled'); else link.classList.remove('is-disabled'); };
+
+  const toIds = (v) => {
+    // Bendras normalizatorius: priima Array, Set, Map (values), NodeList, HTMLCollection, vieną string ar elementą
+    const norm = (input) => {
+      if (input == null) return [];
+      // vienas string/id
+      if (typeof input === 'string' || typeof input === 'number') return [String(input)];
+      // jei turi iteratorių -> paverskim į masyvą
+      if (typeof input[Symbol.iterator] === 'function') {
+        // Map -> imame values, kiti (Set, Array, NodeList) -> tiesiog Array.from
+        const iter = (input instanceof Map) ? input.values() : input;
+        return Array.from(iter);
+      }
+      // specialus atvejis {ids:[...]}
+      if (Array.isArray(input.ids)) return input.ids.slice();
+      return [String(input)];
+    };
+
+    // Element/Document šaka
+    const idsFromDom = (root) => {
+      // 1) helperis, jei yra
+      try {
+        if (typeof getActiveOverlayIds === 'function') {
+          const got = getActiveOverlayIds(root);
+          const arr = norm(got).map(x => {
+            if (typeof x === 'string' || typeof x === 'number') return String(x);
+            if (x && x.dataset && (x.dataset.overlayId || x.dataset.id)) return x.dataset.overlayId || x.dataset.id;
+            if (x && typeof x.value === 'string') return x.value;
+            return String(x);
+          }).filter(Boolean);
+          if (arr.length) return arr;
+        }
+      } catch {}
+      // 2) fallback DOM paieška
+      const q = root.querySelectorAll
+        ? root.querySelectorAll('[data-overlay-id],[data-id],input[name="overlay"],input[type="checkbox"][data-overlay-id]')
+        : [];
+      return Array.from(q).map(el =>
+        (el.dataset && (el.dataset.overlayId || el.dataset.id)) ||
+        (typeof el.value === 'string' && el.value) || ''
+      ).map(String).filter(Boolean);
+    };
+
+    // Pagrindinė šaka
+    if (Array.isArray(v)) return v.map(x => String(x)).filter(Boolean);
+    if (v && (v.nodeType === 1 || v.nodeType === 9)) return idsFromDom(v);
+    // iterable/array-like
+    return norm(v).map(x => String(x)).filter(Boolean);
+  };;
+
+  if (Array.isArray(idsOrDoc)) {
+    const ids = toIds(idsOrDoc);
+    if (!ids.length) {
+    let _ids = ids.slice();
+    try {
+      if (!_ids.length && typeof state !== 'undefined' && state && state.overlays && typeof state.overlays.keys === 'function') {
+        _ids = Array.from(state.overlays.keys()).map(String).filter(Boolean);
+      }
+    } catch {}
+    try {
+      if (!_ids.length && typeof getChart === 'function') {
+        const ch = getChart();
+        if (ch && ch.data && Array.isArray(ch.data.datasets)) {
+          _ids = ch.data.datasets
+            .map(d => (d && d.id && String(d.id).startsWith('overlay:') ? String(d.id).split(':')[1] : ''))
+            .filter(Boolean);
+        }
+      }
+    } catch {}
+    if (!_ids.length) return enable('#');
+    const from = range?.from_ms ?? (typeof state !== 'undefined' ? state.filters?.from_ms : '');
+    const to   = range?.to_ms   ?? (typeof state !== 'undefined' ? state.filters?.to_ms   : '');
+    return enable(composeCsvUrl(_ids, { from_ms: from, to_ms: to }));
   }
-  link.href = composeCsvUrl(active, { from_ms: from, to_ms: to });
-  link.classList.toggle('is-disabled', active.length === 0);
+    return enable(composeCsvUrl(ids, {
+      from_ms: range?.from_ms ?? (typeof state !== 'undefined' ? state.filters?.from_ms : ''),
+      to_ms:   range?.to_ms   ?? (typeof state !== 'undefined' ? state.filters?.to_ms   : '')
+    }));
+  }
+
+  const ids = toIds(idsOrDoc || document);
+  // Fallback 1: jei nerasta DOM'e — bandome iš state.overlays
+  let _ids = ids.slice();
+  try {
+    if (!_ids.length && typeof state !== 'undefined' && state && state.overlays && typeof state.overlays.keys === 'function') {
+      _ids = Array.from(state.overlays.keys()).map(String).filter(Boolean);
+    }
+  } catch {}
+  // Fallback 2: jei dar tuščia — bandome iš chart dataset'ų (overlay:<id>)
+  try {
+    if (!_ids.length && typeof getChart === 'function') {
+      const ch = getChart();
+      if (ch && ch.data && Array.isArray(ch.data.datasets)) {
+        _ids = ch.data.datasets
+          .map(d => (d && d.id && String(d.id).startsWith('overlay:') ? String(d.id).split(':')[1] : ''))
+          .filter(Boolean);
+      }
+    }
+  } catch {}
+  if (!_ids.length) return enable('#');
+  return enable(composeCsvUrl(_ids, { from_ms: (typeof state !== 'undefined' ? state.filters?.from_ms : ''), to_ms: (typeof state !== 'undefined' ? state.filters?.to_ms : '') }));
+
+  const from = (typeof state !== 'undefined' ? state.filters?.from_ms : (range?.from_ms ?? ''));
+  const to   = (typeof state !== 'undefined' ? state.filters?.to_ms   : (range?.to_ms   ?? ''));
+  return enable(composeCsvUrl(ids, { from_ms: from, to_ms: to }));
 }
+
+
 
 if (typeof window !== 'undefined') {
   window.getActiveOverlayIds = getActiveOverlayIds;
