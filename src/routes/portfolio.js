@@ -11,10 +11,18 @@ function parseRangeMs(q) {
   return { fromMs, toMs };
 }
 
+function parseStrategies(q) {
+  const raw = q.strategy ?? q.strategies;
+  if (!raw) return [];
+  const arr = Array.isArray(raw) ? raw : String(raw).split(',');
+  return arr.map(s => s.trim()).filter(Boolean);
+}
+
 router.get('/portfolio', async (req, res) => {
   const range = parseRangeMs(req.query);
   if (!range) return res.status(400).json({ error: 'invalid_time_range' });
   const { fromMs, toMs } = range;
+  const strategies = parseStrategies(req.query);
 
   const openQ = await db.query(`
     SELECT symbol,
@@ -23,9 +31,10 @@ router.get('/portfolio', async (req, res) => {
            COUNT(*) FILTER (WHERE closed_at IS NULL) AS legs
     FROM paper_trades
     WHERE closed_at IS NULL
+      ${strategies.length ? 'AND strategy = ANY($1)' : ''}
     GROUP BY symbol
     HAVING ABS(COALESCE(SUM(CASE WHEN side='LONG' THEN qty ELSE -qty END),0)) > 0
-  `);
+  `, strategies.length ? [strategies] : []);
 
   const symbols = openQ.rows.map(r => r.symbol);
   const prices = await latestPrices(symbols);
@@ -56,28 +65,38 @@ router.get('/portfolio', async (req, res) => {
            SUM((CASE WHEN side='LONG' THEN 1 ELSE -1 END) * qty * (SELECT close FROM candles c WHERE c.symbol=pt.symbol ORDER BY ts DESC LIMIT 1)) AS signed_mv
     FROM paper_trades pt
     WHERE closed_at IS NULL
+      ${strategies.length ? 'AND strategy = ANY($1)' : ''}
     GROUP BY strategy
-  `);
+  `, strategies.length ? [strategies] : []);
   const totalStrat = stratQ.rows.reduce((s, r) => s + Math.abs(Number(r.signed_mv || 0)), 0) || 0;
   const allocByStrategy = stratQ.rows.map(r => ({
     strategy: r.strategy,
     weight: totalStrat ? Math.abs(Number(r.signed_mv || 0)) / totalStrat : 0
   })).sort((a, b) => b.weight - a.weight);
 
+  const symParams = [fromMs, toMs];
+  const symStratCond = strategies.length ? `AND strategy = ANY($${symParams.length + 1})` : '';
+  if (strategies.length) symParams.push(strategies);
   const attrSym = await db.query(`
     SELECT symbol, SUM(pnl) AS pnl
     FROM paper_trades
     WHERE closed_at IS NOT NULL AND closed_at BETWEEN $1::bigint AND $2::bigint
+      ${symStratCond}
     GROUP BY symbol
     ORDER BY SUM(pnl) DESC
-  `, [fromMs, toMs]);
+  `, symParams);
+
+  const strParams = [fromMs, toMs];
+  const strStratCond = strategies.length ? `AND strategy = ANY($${strParams.length + 1})` : '';
+  if (strategies.length) strParams.push(strategies);
   const attrStr = await db.query(`
     SELECT COALESCE(strategy,'default') AS strategy, SUM(pnl) AS pnl
     FROM paper_trades
     WHERE closed_at IS NOT NULL AND closed_at BETWEEN $1::bigint AND $2::bigint
+      ${strStratCond}
     GROUP BY strategy
     ORDER BY SUM(pnl) DESC
-  `, [fromMs, toMs]);
+  `, strParams);
 
   const retQ = await db.query(`
     WITH c AS (
@@ -173,13 +192,18 @@ router.get('/portfolio/attribution', async (req, res) => {
   const { fromMs, toMs } = range;
   const groupBy = (req.query.groupBy === 'strategy') ? 'strategy' : 'symbol';
   const col = groupBy === 'strategy' ? "COALESCE(strategy,'default')" : 'symbol';
+  const strategies = parseStrategies(req.query);
+  const params = [fromMs, toMs];
+  const stratCond = strategies.length ? `AND strategy = ANY($${params.length + 1})` : '';
+  if (strategies.length) params.push(strategies);
   const { rows } = await db.query(`
     SELECT ${col} AS key, SUM(pnl) AS pnl, COUNT(*) AS n
     FROM paper_trades
     WHERE closed_at IS NOT NULL AND closed_at BETWEEN $1::bigint AND $2::bigint
+      ${stratCond}
     GROUP BY ${col}
     ORDER BY SUM(pnl) DESC
-  `, [fromMs, toMs]);
+  `, params);
   res.json({ groupBy, items: rows });
 });
 

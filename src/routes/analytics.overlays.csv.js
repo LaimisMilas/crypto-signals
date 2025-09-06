@@ -4,6 +4,13 @@ import { db } from '../storage/db.js';
 
 const router = express.Router();
 
+function parseStrategies(q) {
+  const raw = q.strategy ?? q.strategies;
+  if (!raw) return [];
+  const arr = Array.isArray(raw) ? raw : String(raw).split(',');
+  return arr.map(s => s.trim()).filter(Boolean);
+}
+
 router.get('/analytics/overlays.csv', async (req, res) => {
   const ids = (req.query.job_ids || '')
     .split(',')
@@ -14,6 +21,7 @@ router.get('/analytics/overlays.csv', async (req, res) => {
     res.status(400).send('job_ids required');
     return;
   }
+  const strategies = parseStrategies(req.query);
 
   const series = [];
   const tsSet = new Set();
@@ -21,7 +29,8 @@ router.get('/analytics/overlays.csv', async (req, res) => {
     const arts = await listArtifacts(id);
     const a = arts.find(x => /equity\.csv$|oos_equity\.csv$/i.test(x.path));
     if (!a) continue;
-    const rows = await readArtifactCSV(id, a.path);
+    let rows = await readArtifactCSV(id, a.path);
+    if (strategies.length) rows = rows.filter(r => strategies.includes(String(r.strategy || '').trim()));
     const { rows: jrows } = await db.query('SELECT type FROM jobs WHERE id=$1', [id]);
     const eq = normalizeEquity(rows, jrows[0]?.type);
     series.push({ id, data: eq });

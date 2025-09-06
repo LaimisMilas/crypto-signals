@@ -5,8 +5,16 @@ import { db } from '../storage/db.js';
 
 const router = express.Router();
 
+function parseStrategies(q) {
+  const raw = q.strategy ?? q.strategies;
+  if (!raw) return [];
+  const arr = Array.isArray(raw) ? raw : String(raw).split(',');
+  return arr.map(s => s.trim()).filter(Boolean);
+}
+
 router.get('/analytics/overlay/:id', async (req, res) => {
   const jobId = Number(req.params.id);
+  const strategies = parseStrategies(req.query);
   const { rows: jrows } = await db.query('SELECT type FROM jobs WHERE id=$1', [jobId]);
   const jobType = jrows[0]?.type;
 
@@ -16,13 +24,15 @@ router.get('/analytics/overlay/:id', async (req, res) => {
 
   let equity = [];
   if (eqArt) {
-    const rows = await readArtifactCSV(jobId, eqArt.path);
+    let rows = await readArtifactCSV(jobId, eqArt.path);
+    if (strategies.length) rows = rows.filter(r => strategies.includes(String(r.strategy || '').trim()));
     equity = normalizeEquity(rows, jobType);
   }
 
   let trades = [];
   if (trArt) {
-    const rows = await readArtifactCSV(jobId, trArt.path);
+    let rows = await readArtifactCSV(jobId, trArt.path);
+    if (strategies.length) rows = rows.filter(r => strategies.includes(String(r.strategy || '').trim()));
     trades = normalizeTrades(rows);
   }
 
