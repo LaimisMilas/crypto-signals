@@ -5,7 +5,7 @@ import crypto from 'crypto';
 const SECRET = 'testsecret';
 process.env.AUTH_SECRET = SECRET;
 
-const mockDb = { query: jest.fn().mockResolvedValue({ rows: [] }) };
+const mockDb = { query: jest.fn().mockResolvedValue({ rows: [{ status: 'active' }] }) };
 await jest.unstable_mockModule('../../src/storage/db.js', () => ({
   db: mockDb,
   getDbPool: () => mockDb,
@@ -55,6 +55,12 @@ describe('auth middleware', () => {
   test('allows authorized /live', async () => {
     const res = await request(app).get('/live').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
+  });
+
+  test('denies inactive subscriber', async () => {
+    mockDb.query.mockResolvedValueOnce({ rows: [{ status: 'canceled' }] });
+    const res = await request(app).get('/live').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
   });
 
   test('protects /risk routes', async () => {
