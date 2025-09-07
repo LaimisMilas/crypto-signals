@@ -1,3 +1,5 @@
+import './auth.js';
+
 export async function initNav(doc = document, loc = window.location) {
   const nav = doc.querySelector('nav');
   if (!nav) return;
