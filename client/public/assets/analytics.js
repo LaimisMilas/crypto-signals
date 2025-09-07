@@ -1,4 +1,4 @@
-import './auth.js';
+import { getToken } from './auth.js';
 import { showToast } from './ui-toast.js';
 import {
   composeAnalyticsQuery,
@@ -540,7 +540,10 @@ export function init(doc = document) {
   if (btBtn) btBtn.addEventListener('click', async () => {
     try {
       const body = { symbol: state.filters.symbol, interval: state.filters.interval, params: {} };
-      const r = await fetch('/jobs/backtest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const headers = { 'Content-Type': 'application/json' };
+      const token = getToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const r = await fetch('/jobs/backtest', { method: 'POST', headers, body: JSON.stringify(body) });
       if (!r.ok) {
         let msg = ''; try { msg = (await r.json())?.message || ''; } catch {}
         throw new Error(`/jobs/backtest [${r.status}] ${msg}`.trim());
