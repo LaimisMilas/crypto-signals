@@ -2,7 +2,6 @@ export default {
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   testTimeout: 15000,
-  extensionsToTreatAsEsm: ['.js'],
   collectCoverageFrom: [
     'src/**/*.js',
     '!src/**/server.js',
