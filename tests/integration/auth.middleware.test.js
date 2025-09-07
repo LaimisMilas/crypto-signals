@@ -50,6 +50,7 @@ describe('auth middleware', () => {
   test('denies anonymous /live', async () => {
     const res = await request(app).get('/live');
     expect(res.status).toBe(401);
+    expect(res.body.error).toBe('unauthorized');
   });
 
   test('allows authorized /live', async () => {
@@ -61,6 +62,7 @@ describe('auth middleware', () => {
     mockDb.query.mockResolvedValueOnce({ rows: [{ status: 'canceled' }] });
     const res = await request(app).get('/live').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(403);
+    expect(res.body.error).toBe('subscription_inactive');
   });
 
   test('protects /risk routes', async () => {
@@ -73,7 +75,37 @@ describe('auth middleware', () => {
   test('protects /jobs routes', async () => {
     let res = await request(app).get('/jobs');
     expect(res.status).toBe(401);
+    expect(res.body.error).toBe('unauthorized');
     res = await request(app).get('/jobs').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
+  });
+
+  test('rejects invalid token', async () => {
+    const res = await request(app)
+      .get('/live')
+      .set('Authorization', 'Bearer invalid');
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('unauthorized');
+  });
+
+  test('rejects expired token', async () => {
+    const expired = sign({ sub: 'tester', exp: Math.floor(Date.now() / 1000) - 10 });
+    const res = await request(app).get('/live').set('Authorization', `Bearer ${expired}`);
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('unauthorized');
+  });
+
+  test('requires email or sub', async () => {
+    const noEmail = sign({ exp: Math.floor(Date.now() / 1000) + 3600 });
+    const res = await request(app).get('/live').set('Authorization', `Bearer ${noEmail}`);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('subscription_required');
+  });
+
+  test('handles db errors', async () => {
+    mockDb.query.mockRejectedValueOnce(new Error('db fail'));
+    const res = await request(app).get('/live').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('auth_db_error');
   });
 });
