@@ -1,3 +1,4 @@
+import './auth.js';
 import { showToast } from './ui-toast.js';
 import {
   composeAnalyticsQuery,
