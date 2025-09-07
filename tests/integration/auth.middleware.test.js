@@ -58,6 +58,11 @@ describe('auth middleware', () => {
     expect(res.status).toBe(200);
   });
 
+  test('allows token via query', async () => {
+    const res = await request(app).get(`/live?token=${token}`);
+    expect(res.status).toBe(200);
+  });
+
   test('denies inactive subscriber', async () => {
     mockDb.query.mockResolvedValueOnce({ rows: [{ status: 'canceled' }] });
     const res = await request(app).get('/live').set('Authorization', `Bearer ${token}`);

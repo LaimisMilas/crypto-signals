@@ -33,11 +33,14 @@ function verifyToken(token, secret = SECRET) {
 export async function auth(req, res, next) {
   if (!SECRET) return res.status(500).json({ error: 'auth_disabled' });
   const header = req.headers['authorization'] || '';
+  let token = null;
   const match = header.match(/^Bearer (.+)$/);
-  if (!match) return res.status(401).json({ error: 'unauthorized' });
+  if (match) token = match[1];
+  else if (req.query && req.query.token) token = String(req.query.token);
+  if (!token) return res.status(401).json({ error: 'unauthorized' });
   let payload;
   try {
-    payload = verifyToken(match[1]);
+    payload = verifyToken(token);
   } catch {
     return res.status(401).json({ error: 'unauthorized' });
   }
