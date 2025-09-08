@@ -1,8 +1,13 @@
 # Authentication
 
 Sensitive API routes are protected using [JSON Web Tokens](https://jwt.io/).
-Clients must send a valid JWT in the `Authorization` header for the following
-paths:
+Clients must provide a valid JWT via one of the following for these paths:
+
+- `Authorization` header
+- `token` query parameter
+- `auth_token` cookie
+
+The protected paths are:
 
 - `/live` and subroutes
 - `/risk/*`
@@ -13,7 +18,7 @@ paths:
 Tokens use the `HS256` algorithm and are validated with the shared secret
 provided via the `AUTH_SECRET` environment variable.
 
-Example request:
+Example request using the `Authorization` header:
 
 ```http
 GET /live HTTP/1.1
