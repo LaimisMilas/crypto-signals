@@ -27,18 +27,85 @@ if (typeof window !== 'undefined') {
     return origFetch(input, init);
   };
 
-  const OrigEventSource = window.EventSource;
-  function EventSourceAuth(url, opts) {
-    const u = new URL(url, window.location.origin);
-    if (token && !u.searchParams.get('token')) {
-      u.searchParams.set('token', token);
+  class EventSourceAuth {
+    constructor(url, opts = {}) {
+      this.url = url;
+      this.readyState = EventSourceAuth.CONNECTING;
+      this.onopen = null;
+      this.onmessage = null;
+      this.onerror = null;
+      this._controller = new AbortController();
+      this._target = new EventTarget();
+
+      const headers = opts.headers ? { ...opts.headers } : {};
+      if (token && !headers.Authorization && !headers.authorization) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      fetch(url, { headers, signal: this._controller.signal })
+        .then(async (res) => {
+          this.readyState = EventSourceAuth.OPEN;
+          this._emit('open');
+
+          const reader = res.body?.getReader();
+          if (!reader) return;
+          const decoder = new TextDecoder('utf-8');
+          let buffer = '';
+          let eventName = 'message';
+          let data = '';
+
+          while (this.readyState === EventSourceAuth.OPEN) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split(/\r?\n/);
+            buffer = lines.pop();
+            for (const line of lines) {
+              if (line.startsWith('event:')) {
+                eventName = line.slice(6).trim();
+              } else if (line.startsWith('data:')) {
+                data += line.slice(5) + '\n';
+              } else if (line === '') {
+                const evt = new MessageEvent(eventName, {
+                  data: data.replace(/\n$/, ''),
+                });
+                this._emitEvent(evt);
+                eventName = 'message';
+                data = '';
+              }
+            }
+          }
+        })
+        .catch(() => {
+          this.readyState = EventSourceAuth.CLOSED;
+          this._emit('error');
+        });
     }
-    return new OrigEventSource(u, opts);
+
+    _emit(type) {
+      const evt = new Event(type);
+      this._target.dispatchEvent(evt);
+      const handler = this['on' + type];
+      if (typeof handler === 'function') handler(evt);
+    }
+
+    _emitEvent(evt) {
+      this._target.dispatchEvent(evt);
+      const handler = this['on' + evt.type];
+      if (typeof handler === 'function') handler(evt);
+    }
+
+    addEventListener(type, cb) { this._target.addEventListener(type, cb); }
+    removeEventListener(type, cb) { this._target.removeEventListener(type, cb); }
+    dispatchEvent(evt) { return this._target.dispatchEvent(evt); }
+    close() {
+      this.readyState = EventSourceAuth.CLOSED;
+      this._controller.abort();
+    }
   }
-  EventSourceAuth.prototype = OrigEventSource.prototype;
-  EventSourceAuth.CONNECTING = OrigEventSource.CONNECTING;
-  EventSourceAuth.OPEN = OrigEventSource.OPEN;
-  EventSourceAuth.CLOSED = OrigEventSource.CLOSED;
+  EventSourceAuth.CONNECTING = 0;
+  EventSourceAuth.OPEN = 1;
+  EventSourceAuth.CLOSED = 2;
   window.EventSource = EventSourceAuth;
 }
 
