@@ -35,7 +35,8 @@ document.getElementById('job-form').addEventListener('submit', async e=>{
   const type = document.getElementById('job-type').value;
   let params;
   try { params = JSON.parse(document.getElementById('job-params').value||'{}'); } catch { alert('Bad JSON'); return; }
-  await fetch('/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,params})});
+  const priority = Number(document.getElementById('job-priority').value);
+  await fetch('/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,params,priority})});
   document.getElementById('job-params').value='{}';
   fetchJobs();
 });

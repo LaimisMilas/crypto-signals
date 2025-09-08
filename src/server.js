@@ -97,6 +97,16 @@ configRoutes(app);
 autoRoutes(app);
 jobRunner.start();
 
+app.post('/jobs', async (req, res) => {
+  const { type, params, priority } = req.body || {};
+  if (!type || !params) return res.status(400).json({ error: 'invalid' });
+  const { rows } = await db.query(
+    'INSERT INTO jobs(type, params, priority) VALUES ($1,$2,$3) RETURNING *',
+    [type, params, Number(priority) || 100]
+  );
+  res.status(201).json(rows[0]);
+});
+
 app.post('/jobs/backtest', async (req, res) => {
   const params = req.body || {};
   const { rows } = await db.query(
@@ -160,9 +170,18 @@ app.get('/jobs/stream', async (req, res) => {
 
 app.get('/jobs/:id(\\d+)', async (req, res) => {
   const id = Number(req.params.id);
-  const { rows } = await db.query('SELECT * FROM jobs WHERE id=$1', [id]);
-  if (!rows.length) return res.status(404).json({ error: 'not_found' });
-  res.json(rows[0]);
+  const { rows: jobs } = await db.query('SELECT * FROM jobs WHERE id=$1', [id]);
+  if (!jobs.length) return res.status(404).json({ error: 'not_found' });
+  const job = jobs[0];
+  const { rows: artifacts } = await db.query(
+    'SELECT * FROM job_artifacts WHERE job_id=$1 ORDER BY id ASC',
+    [id]
+  );
+  const { rows: logs } = await db.query(
+    'SELECT * FROM job_logs WHERE job_id=$1 ORDER BY id DESC LIMIT 100',
+    [id]
+  );
+  res.json({ job, artifacts, logs });
 });
 
 app.post('/jobs/:id(\\d+)/cancel', async (req, res) => {
