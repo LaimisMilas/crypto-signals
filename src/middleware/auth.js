@@ -37,6 +37,9 @@ export async function auth(req, res, next) {
   const match = header.match(/^Bearer (.+)$/);
   if (match) token = match[1];
   else if (req.query && req.query.token) token = String(req.query.token);
+  else if (req.cookies && (req.cookies.auth_token || req.cookies.token)) {
+    token = req.cookies.auth_token || req.cookies.token;
+  }
   if (!token) return res.status(401).json({ error: 'unauthorized' });
   let payload;
   try {
