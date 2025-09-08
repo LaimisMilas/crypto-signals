@@ -55,6 +55,7 @@ function defaultFilters() {
     interval: '1m',
     from_ms: '',
     to_ms: '',
+    strategy: '',
     ds: 'lttb',
     n: 1000,
   };
@@ -488,6 +489,8 @@ export function init(doc = document) {
     form.querySelector('[name=to]').value = state.filters.to_ms;
     form.querySelector('[name=ds]').value = state.filters.ds;
     form.querySelector('[name=n]').value = String(state.filters.n);
+    const stratInput = form.querySelector('[name=strategy]');
+    if (stratInput) stratInput.value = state.filters.strategy;
     const persistDebounced = debounce(() => persistFilters(state.filters), 300);
     form.addEventListener('change', () => {
       state.filters = {
@@ -495,6 +498,7 @@ export function init(doc = document) {
         interval: form.querySelector('[name=interval]').value,
         from_ms: form.querySelector('[name=from]').value,
         to_ms: form.querySelector('[name=to]').value,
+        strategy: form.querySelector('[name=strategy]')?.value,
         ds: form.querySelector('[name=ds]').value,
         n: Number(form.querySelector('[name=n]').value),
       };
@@ -527,6 +531,7 @@ export function init(doc = document) {
       interval: doc.querySelector('[name=interval]')?.value,
       from_ms: doc.querySelector('[name=from]')?.value,
       to_ms: doc.querySelector('[name=to]')?.value,
+      strategy: doc.querySelector('[name=strategy]')?.value,
       ds: doc.querySelector('[name=ds]')?.value,
       n: Number(doc.querySelector('[name=n]')?.value),
     };
@@ -540,6 +545,7 @@ export function init(doc = document) {
   if (btBtn) btBtn.addEventListener('click', async () => {
     try {
       const body = { symbol: state.filters.symbol, interval: state.filters.interval, params: {} };
+      if (state.filters.strategy) body.strategyId = state.filters.strategy;
       const headers = { 'Content-Type': 'application/json' };
       const token = getToken();
       if (token) headers.Authorization = `Bearer ${token}`;
