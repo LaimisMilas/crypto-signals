@@ -13,8 +13,8 @@ async function mount(){
       <fieldset>
         <input name="symbol" value="SOL"/>
         <input name="interval" value="1m"/>
-        <input name="from" value="1722470400000"/>
-        <input name="to" value="2024-08-31"/>
+        <input name="from" type="datetime-local" value="2024-08-01T00:00:00"/>
+        <input name="to" type="datetime-local" value="2024-08-31T00:00:00"/>
         <select name="ds"><option value="none" selected>none</option><option value="lttb">lttb</option></select>
         <input name="n" type="number" value=""/>
         <button type="button" data-apply>Apply</button>
@@ -49,7 +49,7 @@ describe('overlays compose params branches', () => {
     expect(url).toContain('ds=none');
     expect(url).toContain('n=0');
     expect(url).toMatch(/from_ms=1722470400000/);
-    expect(url).toMatch(/to_ms=2024-08-31/);
+    expect(url).toMatch(/to_ms=1725062400000/);
   });
 
   test('data-reset išvalo laukus į tuščias/default', async () => {
@@ -57,7 +57,7 @@ describe('overlays compose params branches', () => {
     document.querySelector('[data-reset]').click();
     const from = document.querySelector('input[name="from"]');
     const ds = document.querySelector('select[name="ds"]');
-    expect(from.value === '' || from.value === '1970-01-01').toBeTruthy();
+    expect(from.value).toBe('');
     expect(ds.value).toBe('lttb');
   });
 });
