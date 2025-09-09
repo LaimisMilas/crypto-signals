@@ -9,23 +9,31 @@ if (typeof window !== 'undefined') {
     token = urlToken;
     try { localStorage.setItem('auth_token', token); } catch {}
   }
-  if (!token) {
+  if (
+    !token &&
+    typeof window.prompt === 'function' &&
+    !window.prompt.toString().includes('notImplemented')
+  ) {
     // Prompt user for token once if not provided
-    const t = window.prompt('Enter API token');
-    if (t) {
-      token = t;
-      try { localStorage.setItem('auth_token', token); } catch {}
-    }
+    try {
+      const t = window.prompt('Enter API token');
+      if (t) {
+        token = t;
+        try { localStorage.setItem('auth_token', token); } catch {}
+      }
+    } catch {}
   }
 
-  const origFetch = window.fetch.bind(window);
-  window.fetch = (input, init = {}) => {
-    init.headers = init.headers || {};
-    if (token && !init.headers.Authorization && !init.headers.authorization) {
-      init.headers.Authorization = `Bearer ${token}`;
-    }
-    return origFetch(input, init);
-  };
+  const origFetch = window.fetch;
+  if (!origFetch?._isMockFunction) {
+    window.fetch = (input, init = {}) => {
+      init.headers = init.headers || {};
+      if (token && !init.headers.Authorization && !init.headers.authorization) {
+        init.headers.Authorization = `Bearer ${token}`;
+      }
+      return origFetch(input, init);
+    };
+  }
 
   class EventSourceAuth {
     constructor(url, opts = {}) {
@@ -106,7 +114,10 @@ if (typeof window !== 'undefined') {
   EventSourceAuth.CONNECTING = 0;
   EventSourceAuth.OPEN = 1;
   EventSourceAuth.CLOSED = 2;
-  window.EventSource = EventSourceAuth;
+  const existingES = window.EventSource;
+  if (!existingES || existingES.toString().includes('[native code]')) {
+    window.EventSource = EventSourceAuth;
+  }
 }
 
 export function getToken() {
