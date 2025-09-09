@@ -19,8 +19,11 @@ export function intervalToMs(interval) {
   return map[interval];
 }
 
-export async function selectLastTs(client) {
-  const { rows } = await client.query('SELECT MAX(ts) AS max FROM candles');
+export async function selectLastTs(client, symbol) {
+  const { rows } = await client.query(
+    'SELECT MAX(ts) AS max FROM candles WHERE symbol=$1',
+    [symbol]
+  );
   const v = rows[0]?.max;
   return v == null ? null : Number(v);
 }
@@ -35,6 +38,7 @@ export async function fetchKlines(symbol, interval, startTime, limit = 1000) {
   const url = `https://api.binance.com/api/v3/klines?${params.toString()}`;
   const { data } = await axios.get(url);
   return data.map(k => ({
+    symbol,
     ts: k[0],
     open: Number(k[1]),
     high: Number(k[2]),
@@ -50,13 +54,13 @@ export async function upsertCandles(client, rows) {
   const params = [];
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
-    params.push(`($${i*6+1},$${i*6+2},$${i*6+3},$${i*6+4},$${i*6+5},$${i*6+6})`);
-    values.push(r.ts, r.open, r.high, r.low, r.close, r.volume);
+    params.push(`($${i*7+1},$${i*7+2},$${i*7+3},$${i*7+4},$${i*7+5},$${i*7+6},$${i*7+7})`);
+    values.push(r.symbol, r.ts, r.open, r.high, r.low, r.close, r.volume);
   }
   const sql = `
-    INSERT INTO candles(ts, open, high, low, close, volume)
+    INSERT INTO candles(symbol, ts, open, high, low, close, volume)
     VALUES ${params.join(',')}
-    ON CONFLICT (ts) DO UPDATE
+    ON CONFLICT (symbol, ts) DO UPDATE
       SET open=EXCLUDED.open,
           high=EXCLUDED.high,
           low=EXCLUDED.low,
@@ -87,7 +91,7 @@ export async function ingestOnce() {
 
   const client = await db.connect();
   try {
-    const lastTs = await selectLastTs(client);
+    const lastTs = await selectLastTs(client, symbol);
     const now = Date.now();
     const start = lastTs != null ? lastTs + intervalMs : now - 365 * 24 * 60 * 60 * 1000;
     const end = now - intervalMs;
@@ -108,10 +112,24 @@ export async function ingestOnce() {
   }
 }
 
-export async function getIngestHealth() {
-  const { rows } = await db.query('SELECT MAX(ts) AS last, COUNT(*) AS rows FROM candles');
+export async function getIngestHealth(symbol) {
+  // Default to config symbol if none provided
+  if (!symbol) {
+    const paramsPath = path.join(__dirname, '..', 'config', 'params.json');
+    try {
+      const text = await fs.readFile(paramsPath, 'utf-8');
+      const cfg = JSON.parse(text);
+      symbol = cfg.symbol || 'BTCUSDT';
+    } catch {
+      symbol = 'BTCUSDT';
+    }
+  }
+  const { rows } = await db.query(
+    'SELECT MAX(ts) AS last, COUNT(*) AS rows FROM candles WHERE symbol=$1',
+    [symbol]
+  );
   const lastTs = rows[0]?.last ? Number(rows[0].last) : null;
   const count = rows[0]?.rows ? Number(rows[0].rows) : 0;
-  return { lastTs, rows: count };
+  return { symbol, lastTs, rows: count };
 }
 
