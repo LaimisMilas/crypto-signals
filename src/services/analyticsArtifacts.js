@@ -3,6 +3,7 @@ import path from 'path';
 import { parse } from 'csv-parse/sync';
 import { db } from '../storage/db.js';
 import { jobEquityPoints } from '../metrics-job.js';
+import {ARTIFACTS_ROOT} from "../config.js";
 
 const cache = new Map(); // key -> { data, ts, mtime }
 const TTL_MS = 10 * 60 * 1000;
@@ -23,7 +24,7 @@ function readCSVFile(filePath){
 }
 
 export async function readArtifactCSV(jobId, artifactPath){
-  const p = path.resolve(artifactPath);
+  const p = path.resolve(ARTIFACTS_ROOT + "/" + artifactPath);
   const stat = fs.statSync(p);
   const key = _key(jobId, p, stat.mtimeMs);
   const hit = cache.get(key);
