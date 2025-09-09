@@ -34,7 +34,8 @@ router.get('/jobs/:id', async (req, res) => {
   if (!jobs.length) return res.status(404).json({ error: 'not_found' });
   const job = jobs[0];
   const { rows: artifacts } = await db.query('SELECT * FROM job_artifacts WHERE job_id=$1 ORDER BY id ASC', [id]);
-  const { rows: logs } = await db.query('SELECT * FROM job_logs WHERE job_id=$1 ORDER BY id DESC LIMIT 100', [id]);
+  // Return logs in chronological order for easier reading in the UI
+  const { rows: logs } = await db.query('SELECT * FROM job_logs WHERE job_id=$1 ORDER BY id ASC LIMIT 100', [id]);
   res.json({ job, artifacts, logs });
 });
 
