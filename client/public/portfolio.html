@@ -14,11 +14,11 @@
   <main class="container">
     <div class="tabs" data-tabs id="portfolio-tabs">
       <div class="tablist" role="tablist" aria-label="Portfolio sections">
-        <button role="tab" id="tab-alloc" data-tab="alloc" aria-selected="true">Allocation</button>
-        <button role="tab" id="tab-risk" data-tab="risk">Risk</button>
-        <button role="tab" id="tab-corr" data-tab="corr">Correlation</button>
-        <button role="tab" id="tab-attr" data-tab="attr">Attribution</button>
-        <button role="tab" id="tab-eq" data-tab="eq">Equity</button>
+        <button role="tab" id="tab-alloc" data-tab="alloc" aria-controls="panel-alloc" aria-selected="true">Allocation</button>
+        <button role="tab" id="tab-risk" data-tab="risk" aria-controls="panel-risk">Risk</button>
+        <button role="tab" id="tab-corr" data-tab="corr" aria-controls="panel-corr">Correlation</button>
+        <button role="tab" id="tab-attr" data-tab="attr" aria-controls="panel-attr">Attribution</button>
+        <button role="tab" id="tab-eq" data-tab="eq" aria-controls="panel-eq">Equity</button>
       </div>
 
       <section role="tabpanel" id="panel-alloc" data-tab-panel="alloc" aria-labelledby="tab-alloc"
@@ -47,5 +47,6 @@
   <script type="module" src="/assets/ui-breadcrumbs.js"></script>
   <script type="module" src="/assets/ui-tabs.js"></script>
   <script type="module" src="/assets/ui-lazy.js"></script>
+  <script type="module" src="/assets/portfolio.js"></script>
 </body>
 </html>
