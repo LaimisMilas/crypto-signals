@@ -49,6 +49,26 @@ const state = {
   timers: {},
 };
 
+function msToInputValue(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const d = new Date(n);
+  const pad = (v, l = 2) => String(v).padStart(l, '0');
+  const yyyy = d.getFullYear();
+  const MM = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mm = pad(d.getMinutes());
+  const ss = pad(d.getSeconds());
+  return `${yyyy}-${MM}-${dd}T${hh}:${mm}:${ss}`;
+}
+
+function inputValueToMs(val) {
+  if (!val) return '';
+  const ms = Date.parse(val);
+  return Number.isFinite(ms) ? String(ms) : '';
+}
+
 function defaultFilters() {
   return {
     symbol: 'SOLUSDT',
@@ -485,8 +505,8 @@ export function init(doc = document) {
   if (form) {
     form.querySelector('[name=symbol]').value = state.filters.symbol;
     form.querySelector('[name=interval]').value = state.filters.interval;
-    form.querySelector('[name=from]').value = state.filters.from_ms;
-    form.querySelector('[name=to]').value = state.filters.to_ms;
+    form.querySelector('[name=from]').value = msToInputValue(state.filters.from_ms);
+    form.querySelector('[name=to]').value = msToInputValue(state.filters.to_ms);
     form.querySelector('[name=ds]').value = state.filters.ds;
     form.querySelector('[name=n]').value = String(state.filters.n);
     const stratInput = form.querySelector('[name=strategy]');
@@ -496,8 +516,8 @@ export function init(doc = document) {
       state.filters = {
         symbol: form.querySelector('[name=symbol]').value,
         interval: form.querySelector('[name=interval]').value,
-        from_ms: form.querySelector('[name=from]').value,
-        to_ms: form.querySelector('[name=to]').value,
+        from_ms: inputValueToMs(form.querySelector('[name=from]').value),
+        to_ms: inputValueToMs(form.querySelector('[name=to]').value),
         strategy: form.querySelector('[name=strategy]')?.value,
         ds: form.querySelector('[name=ds]').value,
         n: Number(form.querySelector('[name=n]').value),
@@ -529,8 +549,8 @@ export function init(doc = document) {
     state.filters = {
       symbol: doc.querySelector('[name=symbol]')?.value,
       interval: doc.querySelector('[name=interval]')?.value,
-      from_ms: doc.querySelector('[name=from]')?.value,
-      to_ms: doc.querySelector('[name=to]')?.value,
+      from_ms: inputValueToMs(doc.querySelector('[name=from]')?.value),
+      to_ms: inputValueToMs(doc.querySelector('[name=to]')?.value),
       strategy: doc.querySelector('[name=strategy]')?.value,
       ds: doc.querySelector('[name=ds]')?.value,
       n: Number(doc.querySelector('[name=n]')?.value),

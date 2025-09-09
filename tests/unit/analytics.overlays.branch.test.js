@@ -11,8 +11,8 @@ function setupDom(){
     <div id="toasts"></div>
     <input name="symbol" value="SOLUSDT">
     <input name="interval" value="1m">
-    <input name="from">
-    <input name="to">
+    <input name="from" type="datetime-local">
+    <input name="to" type="datetime-local">
     <input name="strategy">
     <input name="ds" value="lttb">
     <input name="n" value="1000">
@@ -109,13 +109,13 @@ describe('analytics overlays extra branches', () => {
     await mod.fetchOverlay(3, 'job-3', document);
     const host = document.querySelector('[data-overlays-list]');
     host.innerHTML = '<div><input type="checkbox" data-job-id="3" checked></div>';
-    document.querySelector('[name=from]').value = '10';
-    document.querySelector('[name=to]').value = '20';
+    document.querySelector('[name=from]').value = '1970-01-01T00:00:10';
+    document.querySelector('[name=to]').value = '1970-01-01T00:00:20';
     document.querySelector('[data-apply]').click();
     await flush();
     mod.updateCsvLink(document);
     const href = document.querySelector('[data-export-csv]').getAttribute('href');
-    const expected = helpers.composeCsvUrl(['3'], { from_ms:'10', to_ms:'20' });
+    const expected = helpers.composeCsvUrl(['3'], { from_ms:'10000', to_ms:'20000' });
     expect(href).toBe(expected);
   });
 

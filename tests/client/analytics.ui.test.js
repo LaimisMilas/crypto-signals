@@ -31,15 +31,15 @@ describe('analytics ui', () => {
     await flush();
     global.fetch.mockClear();
     document.querySelector('[name=symbol]').value = 'SOL';
-    document.querySelector('[name=from]').value = '1';
-    document.querySelector('[name=to]').value = '2';
+    document.querySelector('[name=from]').value = '1970-01-01T00:00:01';
+    document.querySelector('[name=to]').value = '1970-01-01T00:00:02';
     document.querySelector('[name=strategy]').value = '';
     document.querySelector('[data-apply]').click();
     await flush();
     const url = global.fetch.mock.calls[0][0];
     expect(url).toContain('symbol=SOL');
-    expect(url).toContain('from_ms=1');
-    expect(url).toContain('to_ms=2');
+    expect(url).toContain('from_ms=1000');
+    expect(url).toContain('to_ms=2000');
     expect(url).not.toContain('strategy=');
   });
 
@@ -76,8 +76,8 @@ describe('analytics ui', () => {
     const mod = await import('../../client/public/assets/analytics.js');
     mod.init(document);
     await flush();
-    document.querySelector('[name=from]').value = '1';
-    document.querySelector('[name=to]').value = '2';
+    document.querySelector('[name=from]').value = '1970-01-01T00:00:01';
+    document.querySelector('[name=to]').value = '1970-01-01T00:00:02';
     document.querySelector('[name=strategy]').value = 'A';
     document.querySelector('[data-reset]').click();
     await flush();
