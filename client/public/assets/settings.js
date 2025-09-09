@@ -51,6 +51,5 @@ async function loadPresets() {
     presetsPanel.innerHTML = '<p>Failed to load presets.</p>';
   }
 }
-
 loadStrategies();
 loadPresets();
