@@ -51,7 +51,9 @@ async function showDetail(id){
   const res = await fetch(`/jobs/${id}`);
   const data = await res.json();
   document.getElementById('detail-id').textContent = id;
-  document.getElementById('log').textContent = data.logs.map(l=>`[${l.level}] ${l.msg}`).join('\n');
+  // Display logs in chronological order
+  const logs = (data.logs || []).sort((a,b)=>a.id-b.id);
+  document.getElementById('log').textContent = logs.map(l=>`[${l.level}] ${l.msg}`).join('\n');
   document.getElementById('artifacts').innerHTML = data.artifacts.map(a=>`<li><a href="/jobs/${id}/artifacts/${a.id}/download">${a.label||a.kind}</a></li>`).join('');
   document.getElementById('detail').style.display='block';
   updateProgress(id, data.job.progress||0);

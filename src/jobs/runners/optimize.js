@@ -7,8 +7,8 @@ export async function run(job, { log, progress, signal }) {
   for (let i = 0; i < total; i++) {
     if (signal?.aborted) throw new Error('canceled');
     await sleep(200);
-    progress((i + 1) / total);
-    log('info', `combo ${i + 1} / ${total}`);
+    await progress((i + 1) / total);
+    await log('info', `combo ${i + 1} / ${total}`);
   }
   await writeCSV(job.id, job.type, 'optimize_results.csv', 'params,metric\n', 'Optimize Results');
   const result = { best: null };
