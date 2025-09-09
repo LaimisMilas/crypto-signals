@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import bodyParser from 'body-parser';
-import { db, endPool } from './storage/db.js';
+import { db, endPool, listen } from './storage/db.js';
 import { createSingleUseInviteLink } from './notify/telegram.js';
 import { createCheckoutSession, stripeWebhook } from './payments/stripe.js';
 import { startLive, stopLive, resetLive, getLiveState, getLiveConfig, setLiveConfig, stopBackground } from './live.js';
@@ -97,13 +97,12 @@ configRoutes(app);
 autoRoutes(app);
 jobRunner.start();
 
-app.post('/jobs/backtest', async (req, res) => {
-  const params = req.body || {};
+app.post('/jobs', async (req, res) => {
+  const { type, params, priority } = req.body || {};
+  if (!type || !params) return res.status(400).json({ error: 'invalid' });
   const { rows } = await db.query(
-    `INSERT INTO jobs(type, status, priority, params)
-     VALUES('backtest','queued',$1,$2)
-     RETURNING *`,
-    [Number(params.priority ?? 0), params]
+    'INSERT INTO jobs(type, params, priority) VALUES ($1,$2,$3) RETURNING *',
+    [type, params, Number(priority) || 100]
   );
   res.status(201).json(rows[0]);
 });
@@ -116,17 +115,70 @@ app.get('/jobs', async (_req, res) => {
   res.json(rows);
 });
 
-app.get('/jobs/:id', async (req, res) => {
-  const { rows } = await db.query('SELECT * FROM jobs WHERE id=$1', [req.params.id]);
-  if (!rows.length) return res.status(404).json({ error: 'not_found' });
-  res.json(rows[0]);
+app.get('/jobs/stream', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  if (req.trace?.trace_id) res.write(`: trace_id=${req.trace.trace_id}\n`);
+  if (req.trace?.req_id) res.write(`: req_id=${req.trace.req_id}\n`);
+  res.write('\n');
+  res.flushHeaders?.();
+  const filterId = req.query.id ? Number(req.query.id) : null;
+
+  const sendEvent = (type, payload) => {
+    const meta = { trace_id: req.trace?.trace_id || null, req_id: req.trace?.req_id || null };
+    res.write(`event: ${type}\n`);
+    res.write(`data: ${JSON.stringify({ ...payload, meta })}\n\n`);
+  };
+
+  const sendUpdate = async (jobId) => {
+    const { rows: jobRows } = await db.query(
+      'SELECT id, status, progress FROM jobs WHERE id=$1',
+      [jobId]
+    );
+    if (jobRows[0]) sendEvent('job', jobRows[0]);
+    const { rows: logRows } = await db.query(
+      'SELECT id, level, msg, ts FROM job_logs WHERE job_id=$1 ORDER BY id DESC LIMIT 1',
+      [jobId]
+    );
+    if (logRows[0]) sendEvent('log', logRows[0]);
+  };
+
+  const release = await listen('job_update', async (payload) => {
+    const jobId = Number(payload);
+    if (filterId && jobId !== filterId) return;
+    await sendUpdate(jobId);
+  });
+
+  if (filterId) await sendUpdate(filterId);
+
+  req.on('close', () => {
+    release();
+  });
 });
 
-app.post('/jobs/:id/cancel', async (req, res) => {
-  jobRunner.requestCancel(req.params.id);
+app.get('/jobs/:id(\\d+)', async (req, res) => {
+  const id = Number(req.params.id);
+  const { rows: jobs } = await db.query('SELECT * FROM jobs WHERE id=$1', [id]);
+  if (!jobs.length) return res.status(404).json({ error: 'not_found' });
+  const job = jobs[0];
+  const { rows: artifacts } = await db.query(
+    'SELECT * FROM job_artifacts WHERE job_id=$1 ORDER BY id ASC',
+    [id]
+  );
+  const { rows: logs } = await db.query(
+    'SELECT * FROM job_logs WHERE job_id=$1 ORDER BY id DESC LIMIT 100',
+    [id]
+  );
+  res.json({ job, artifacts, logs });
+});
+
+app.post('/jobs/:id(\\d+)/cancel', async (req, res) => {
+  const id = Number(req.params.id);
+  jobRunner.requestCancel(id);
   await db.query(
     `UPDATE jobs SET status='canceled', finished_at=now() WHERE id=$1 AND status IN ('queued')`,
-    [req.params.id]
+    [id]
   );
   res.json({ ok: true });
 });
