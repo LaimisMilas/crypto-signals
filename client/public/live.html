@@ -12,7 +12,13 @@
   <div id="app-nav"></div>
   <div id="app-breadcrumbs"></div>
 
+  <div id="toasts" aria-live="polite"></div>
+
   <main class="container">
+    <div class="live-controls">
+      <button data-live-start>Start</button>
+      <button data-live-stop>Stop</button>
+    </div>
     <div class="ui-tabs" id="live-tabs" role="tablist">
       <button role="tab" aria-controls="live-equity" data-module="liveEquity">Equity</button>
       <button role="tab" aria-controls="live-history" data-module="liveHistory">History</button>
@@ -40,5 +46,6 @@
     <script type="module" src="/assets/ui-tabs.js"></script>
     <script type="module" src="/assets/ui-lazy.js"></script>
     <script type="module" src="/assets/ui-loader.js"></script>
+    <script type="module" src="/assets/live.js"></script>
   </body>
 </html>
