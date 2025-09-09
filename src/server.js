@@ -107,17 +107,6 @@ app.post('/jobs', async (req, res) => {
   res.status(201).json(rows[0]);
 });
 
-app.post('/jobs/backtest', async (req, res) => {
-  const params = req.body || {};
-  const { rows } = await db.query(
-    `INSERT INTO jobs(type, status, priority, params)
-     VALUES('backtest','queued',$1,$2)
-     RETURNING *`,
-    [Number(params.priority ?? 0), params]
-  );
-  res.status(201).json(rows[0]);
-});
-
 app.get('/jobs', async (_req, res) => {
   const { rows } = await db.query(
     `SELECT id, type, status, progress, created_at, started_at, finished_at

@@ -26,28 +26,31 @@ afterAll(async () => {
 }, 10000);
 
 test('backtest job runs and produces artifact', async () => {
-    const res = await request(app).post('/jobs/backtest').set('Authorization', `Bearer ${token}`).send({ symbol: 'BTCUSDT', from_ms: 0, to_ms: 4000, strategy: 'demo' });
+  const res = await request(app)
+    .post('/jobs')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ type: 'backtest', params: { symbol: 'BTCUSDT', from_ms: 0, to_ms: 4000, strategy: 'demo' }, priority: 0 });
   expect(res.status).toBe(201);
   const id = res.body.id;
   let job;
   for (let i = 0; i < 20; i++) {
     await new Promise(r => setTimeout(r, 500));
-      const poll = await request(app).get(`/jobs/${id}`).set('Authorization', `Bearer ${token}`);
+    const poll = await request(app).get(`/jobs/${id}`).set('Authorization', `Bearer ${token}`);
     expect(poll.status).toBe(200);
     job = poll.body;
     if (['succeeded', 'failed', 'canceled'].includes(job.status)) break;
   }
   expect(['succeeded', 'failed', 'canceled']).toContain(job.status);
   if (job.status === 'succeeded') {
-      const list = await request(app).get(`/jobs/${id}/artifacts`).set('Authorization', `Bearer ${token}`);
-      expect(list.status).toBe(200);
-      expect(list.body.artifacts.length).toBeGreaterThan(0);
-      const art = list.body.artifacts[0];
-      const dl = await request(app).get(art.download).set('Authorization', `Bearer ${token}`);
-      expect(dl.status).toBe(200);
-      expect(dl.text).toMatch(/ts,equity/);
-    }
-  });
+    const list = await request(app).get(`/jobs/${id}/artifacts`).set('Authorization', `Bearer ${token}`);
+    expect(list.status).toBe(200);
+    expect(list.body.artifacts.length).toBeGreaterThan(0);
+    const art = list.body.artifacts[0];
+    const dl = await request(app).get(art.download).set('Authorization', `Bearer ${token}`);
+    expect(dl.status).toBe(200);
+    expect(dl.text).toMatch(/ts,equity/);
+  }
+});
 
 function sign(payload) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');

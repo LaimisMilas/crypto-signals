@@ -544,15 +544,23 @@ export function init(doc = document) {
   const btBtn = doc.querySelector('[data-backtest-quick]');
   if (btBtn) btBtn.addEventListener('click', async () => {
     try {
-      const body = { symbol: state.filters.symbol, interval: state.filters.interval, params: {} };
-      if (state.filters.strategy) body.strategyId = state.filters.strategy;
+      const body = {
+        type: 'backtest',
+        params: {
+          symbol: state.filters.symbol,
+          interval: state.filters.interval,
+          params: {},
+        },
+        priority: 0,
+      };
+      if (state.filters.strategy) body.params.strategyId = state.filters.strategy;
       const headers = { 'Content-Type': 'application/json' };
       const token = getToken();
       if (token) headers.Authorization = `Bearer ${token}`;
-      const r = await fetch('/jobs/backtest', { method: 'POST', headers, body: JSON.stringify(body) });
+      const r = await fetch('/jobs', { method: 'POST', headers, body: JSON.stringify(body) });
       if (!r.ok) {
         let msg = ''; try { msg = (await r.json())?.message || ''; } catch {}
-        throw new Error(`/jobs/backtest [${r.status}] ${msg}`.trim());
+        throw new Error(`/jobs [${r.status}] ${msg}`.trim());
       }
       showToast('Backtest started', { doc });
       listJobs(doc);
