@@ -375,14 +375,17 @@ BEGIN;
 -- =========================
 CREATE TABLE IF NOT EXISTS public.candles (
                                             id      SERIAL PRIMARY KEY,
-                                            ts      BIGINT NOT NULL UNIQUE,                       -- ms since epoch
+                                            symbol  TEXT   NOT NULL,
+                                            ts      BIGINT NOT NULL,                       -- ms since epoch
                                             open    DOUBLE PRECISION,
                                             high    DOUBLE PRECISION,
                                             low     DOUBLE PRECISION,
                                             close   DOUBLE PRECISION,
-                                            volume  DOUBLE PRECISION
+                                            volume  DOUBLE PRECISION,
+                                            UNIQUE(symbol, ts)
 );
 
+CREATE INDEX IF NOT EXISTS idx_candles_symbol_ts ON public.candles(symbol, ts);
 CREATE INDEX IF NOT EXISTS idx_candles_ts ON public.candles(ts);
 
 
